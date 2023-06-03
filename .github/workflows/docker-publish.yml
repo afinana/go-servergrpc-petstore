@@ -17,8 +17,8 @@ env:
   # Use docker.io for Docker Hub if empty
   REGISTRY: docker.io
   # github.repository as <account>/<repo>
-  USER_ACCOUNT: ${{ secrets.GITHUB_USERNAME }}
-  USER_PASSWORD: ${{ secrets.GITHUB_PASSWORD }}  
+  USER_ACCOUNT: ${{ secrets.DOCKERHUB_USERNAME  }}
+  USER_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD  }}  
   IMAGE_NAME: ${{ github.repository }}
 
 
@@ -58,7 +58,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ env.USERNAME }}
-          password: ${{ env.USER_PASSWORD }}
+          password: ${{ secrets.USER_PASSWORD }}
 
       # Extract metadata (tags, labels) for Docker
       # https://github.com/docker/metadata-action
