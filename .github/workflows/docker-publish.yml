@@ -19,7 +19,7 @@ env:
   # github.repository as <account>/<repo>
   USER_ACCOUNT: ${{ secrets.DOCKERHUB_USERNAME  }}
   USER_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD  }}  
-  IMAGE_NAME:  ${{ github.event.repository.name }}
+  IMAGE_NAME: go-servergrpc-petstore
 
 
 jobs:
