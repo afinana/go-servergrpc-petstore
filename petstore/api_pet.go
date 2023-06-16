@@ -12,7 +12,6 @@ package petstore
 
 import (
 	"context"
-	"reflect"
 	"strconv"
 
 	codes "google.golang.org/grpc/codes"
@@ -28,13 +27,13 @@ func (app *Application) AddPet(ctx context.Context, in *AddPetRequest) (*emptypb
 	m := createPetEntity(petRequest)
 
 	// Insert new Pets
-	insertResult, err := app.pets.Insert(*m)
+	pet, err := app.pets.Insert(*m)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "AddPet error: %s", err)
 	}
 	//m.id = insertResult.InsertedID.(primitive.ObjectID)
-	app.infoLog.Printf("New pet have been created, id=%s", insertResult.InsertedID)
+	app.infoLog.Printf("New pet have been created, id=%s", pet.ID)
 
 	return out, nil
 
@@ -42,24 +41,17 @@ func (app *Application) AddPet(ctx context.Context, in *AddPetRequest) (*emptypb
 func (app *Application) GetPetById(ctx context.Context, in *GetPetByIdRequest) (*Pet, error) {
 
 	// Get id from incoming url
-	//id := strconv.FormatInt(in.PetId, 10)
-	//app.infoLog.Printf("Get pet by id=%s \n", in.PetId)
+	id := strconv.FormatInt(in.PetId, 10)
+	app.infoLog.Printf("Get pet by id=%s \n", in.PetId)
 
-	app.infoLog.Printf("Get pet by id=%d \n", in.PetId)
-
+	
 	// Find Pets by id
 	model, err := app.pets.FindByID(in.PetId)
 	if err != nil {
-		if err.Error() == "ErrNoDocuments" {
-			app.infoLog.Println("Pets not found")
-			return nil, status.Errorf(codes.Internal, "Pets not found error: %s", err)
-		}
-		// Any other error will send an internal server error
-		app.serverError(err)
-	}
 
-	if reflect.ValueOf(model).IsZero() {
-		return nil, status.Errorf(codes.Internal, "Pets not found error")
+		app.infoLog.Println("Pets not found")
+		return nil, status.Errorf(codes.Internal, "Pets not found error: %s", err)
+
 	}
 	result := createPetDTO(model)
 	return result, nil
@@ -72,13 +64,13 @@ func (app *Application) DeletePet(ctx context.Context, in *DeletePetRequest) (*e
 	id := strconv.FormatInt(in.PetId, 10)
 
 	// Delete Pets by id
-	deleteResult, err := app.pets.Delete(id)
+	err := app.pets.Delete(id)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "DeletePet error: %s", err)
 	}
 
-	app.infoLog.Printf("Have been eliminated %d pet(s)", deleteResult.DeletedCount)
+	app.infoLog.Printf("Have been eliminated pet with id: %d ", in.PetId)
 	return out, nil
 }
 
@@ -114,7 +106,7 @@ func (app *Application) FindPetsByTags(ctx context.Context, in *FindPetsByTagsRe
 	var model []PetEntity
 
 	// Find Pets by id
-	model, err := app.pets.FindBytags(tags)
+	model, err := app.pets.FindByTagsRedis("pets", tags)
 	if err != nil {
 		if err.Error() == "ErrNoDocuments" {
 			app.infoLog.Println("Pets not found")
@@ -138,12 +130,12 @@ func (app *Application) UpdatePet(ctx context.Context, in *UpdatePetRequest) (*e
 	m := createPetEntity(petRequest)
 
 	// Insert new Pets
-	insertResult, err := app.pets.Update(*m)
+	pet, err := app.pets.Update(*m)
 	if err != nil {
 		app.serverError(err)
 	}
 
-	app.infoLog.Printf("New pet have been created, id=%s \n", insertResult.InsertedID)
+	app.infoLog.Printf("New pet have been created, id=%s \n", pet.ID)
 	return out, nil
 
 }
