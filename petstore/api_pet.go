@@ -42,9 +42,8 @@ func (app *Application) GetPetById(ctx context.Context, in *GetPetByIdRequest) (
 
 	// Get id from incoming url
 	id := strconv.FormatInt(in.PetId, 10)
-	app.infoLog.Printf("Get pet by id=%s \n", in.PetId)
+	app.infoLog.Printf("Get pet by id=%s \n", id)
 
-	
 	// Find Pets by id
 	model, err := app.pets.FindByID(in.PetId)
 	if err != nil {

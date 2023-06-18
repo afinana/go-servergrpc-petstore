@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"strconv"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -42,25 +41,10 @@ func (m *PetModel) All() ([]PetEntity, error) {
 	return pets, nil
 }
 
-// FindByID will be used to find a pet registry by id
-func (m *PetModel) FindByObjectID(id string) (*PetEntity, error) {
-	ctx := context.Background()
-
-	// Find order by id
-	data, err := m.C.Get(ctx, id).Result()
-	if err != nil {
-		// Checks if the order was not found
-		return nil, err
-	}
-	var pet PetEntity
-	json.Unmarshal([]byte(data), &pet)
-	return &pet, nil
-}
 func (m *PetModel) FindByID(id int64) (*PetEntity, error) {
 
 	// Find pet by id
-	petId := strconv.FormatInt(id, 10)
-	return m.FindByObjectID(petId)
+	return m.FindByRedisID(fmt.Sprintf("pet:%d", id))
 
 }
 
