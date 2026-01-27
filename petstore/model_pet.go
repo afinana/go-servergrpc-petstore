@@ -16,7 +16,7 @@ import (
 
 type PetEntity struct {
 	ID        primitive.ObjectID `json:"ID" bson:"_id,omitempty"`
-	Id        int64              `json:"id,omitempty"`
+	Id        int64              `json:"id,omitempty" bson:"id,omitempty"`
 	Category  *CategoryEntity    `json:"category,omitempty"`
 	Name      string             `json:"name"`
 	PhotoUrls []string           `json:"photoUrls"`

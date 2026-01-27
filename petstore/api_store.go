@@ -12,33 +12,68 @@ package petstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"go.mongodb.org/mongo-driver/mongo"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
-func (s *Application) DeleteOrder(context context.Context, in *DeleteOrderRequest) (*emptypb.Empty, error) {
+func (s *Application) DeleteOrder(ctx context.Context, in *DeleteOrderRequest) (*emptypb.Empty, error) {
+	fmt.Printf("DeleteOrder:: id=%d\n", in.OrderId)
 
-	fmt.Println("DeleteOrder:: create a new user")
-	return nil, status.Errorf(codes.Unimplemented, "method PlaceOrder not implemented")
+	_, err := s.stores.DeleteByID(in.OrderId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to delete order: %v", err)
+	}
+
+	return &emptypb.Empty{}, nil
 }
 
-func (s *Application) GetInventory(context context.Context, in *emptypb.Empty) (*GetInventoryResponse, error) {
-
+func (s *Application) GetInventory(ctx context.Context, in *emptypb.Empty) (*GetInventoryResponse, error) {
 	fmt.Println("GetInventory:: get inventory")
-	return nil, status.Errorf(codes.Unimplemented, "method GetInventory not implemented")
+
+	inventory, err := s.stores.GetInventory(ctx, s.pets.C)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get inventory: %v", err)
+	}
+
+	items := []*MapInventory{}
+	for k, v := range inventory {
+		items = append(items, &MapInventory{Name: k, Value: int64(v)})
+	}
+
+	return &GetInventoryResponse{Items: items}, nil
 }
 
-func (s *Application) GetOrderById(context context.Context, in *GetOrderByIdRequest) (*Order, error) {
+func (s *Application) GetOrderById(ctx context.Context, in *GetOrderByIdRequest) (*Order, error) {
+	fmt.Printf("GetOrderById:: id=%d\n", in.OrderId)
 
-	fmt.Println("GetOrderById:: get order by id")
-	return nil, status.Errorf(codes.Unimplemented, "method GetOrderById not implemented")
+	orderEntity, err := s.stores.FindByID(in.OrderId)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, status.Errorf(codes.NotFound, "order not found: %d", in.OrderId)
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get order: %v", err)
+	}
+
+	return createOrderDTO(orderEntity), nil
 }
 
-func (s *Application) PlaceOrder(context context.Context, in *PlaceOrderRequest) (*Order, error) {
-
+func (s *Application) PlaceOrder(ctx context.Context, in *PlaceOrderRequest) (*Order, error) {
 	fmt.Println("PlaceOrder:: place a new order")
-	return nil, status.Errorf(codes.Unimplemented, "method PlaceOrder not implemented")
+
+	if in.Body == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "order body is required")
+	}
+
+	orderEntity := createOrderEntity(in.Body)
+	_, err := s.stores.Insert(*orderEntity)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to place order: %v", err)
+	}
+
+	return createOrderDTO(orderEntity), nil
 }

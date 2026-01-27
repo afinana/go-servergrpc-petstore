@@ -16,7 +16,7 @@ import (
 
 type UserEntity struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty"`
-	Id        int64              `json:"id,omitempty"`
+	Id        int64              `json:"id,omitempty" bson:"id,omitempty"`
 	Username  string             `json:"username,omitempty"`
 	FirstName string             `json:"firstName,omitempty"`
 	LastName  string             `json:"lastName,omitempty"`

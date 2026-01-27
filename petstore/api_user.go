@@ -20,47 +20,177 @@ import (
 )
 
 func (s *Application) CreateUser(ctx context.Context, in *CreateUserRequest) (*emptypb.Empty, error) {
-
 	fmt.Println("CreateUser:: create a new user")
-	return nil, status.Errorf(codes.Unimplemented, "method CreateUser not implemented")
+
+	if in.Body == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "request body is empty")
+	}
+
+	userEntity := UserEntity{
+		Id:         in.Body.Id,
+		Username:   in.Body.Username,
+		FirstName:  in.Body.FirstName,
+		LastName:   in.Body.LastName,
+		Email:      in.Body.Email,
+		Password:   in.Body.Password,
+		Phone:      in.Body.Phone,
+		UserStatus: in.Body.UserStatus,
+	}
+
+	_, err := s.users.Insert(userEntity)
+	if err != nil {
+		s.serverError(err)
+		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
+	}
+
+	return &emptypb.Empty{}, nil
 }
+
 func (s *Application) CreateUsersWithArrayInput(ctx context.Context, in *CreateUsersWithArrayInputRequest) (*emptypb.Empty, error) {
-
-	fmt.Println("CreateUsersWithArrayInput:: create a new user")
-	return nil, status.Errorf(codes.Unimplemented, "method CreateUsersWithArrayInput not implemented")
+	fmt.Println("CreateUsersWithArrayInput:: batch create users")
+	for _, user := range in.Body {
+		userEntity := UserEntity{
+			Id:         user.Id,
+			Username:   user.Username,
+			FirstName:  user.FirstName,
+			LastName:   user.LastName,
+			Email:      user.Email,
+			Password:   user.Password,
+			Phone:      user.Phone,
+			UserStatus: user.UserStatus,
+		}
+		_, err := s.users.Insert(userEntity)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create user %s: %v", user.Username, err)
+		}
+	}
+	return &emptypb.Empty{}, nil
 }
+
 func (s *Application) CreateUsersWithListInput(ctx context.Context, in *CreateUsersWithListInputRequest) (*emptypb.Empty, error) {
-
-	fmt.Println("CreateUsersWithListInput:: create a new user")
-	return nil, status.Errorf(codes.Unimplemented, "method CreateUsersWithListInput not implemented")
+	fmt.Println("CreateUsersWithListInput:: batch create users")
+	for _, user := range in.Body {
+		userEntity := UserEntity{
+			Id:         user.Id,
+			Username:   user.Username,
+			FirstName:  user.FirstName,
+			LastName:   user.LastName,
+			Email:      user.Email,
+			Password:   user.Password,
+			Phone:      user.Phone,
+			UserStatus: user.UserStatus,
+		}
+		_, err := s.users.Insert(userEntity)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create user %s: %v", user.Username, err)
+		}
+	}
+	return &emptypb.Empty{}, nil
 }
+
 func (s *Application) DeleteUser(ctx context.Context, in *DeleteUserRequest) (*emptypb.Empty, error) {
+	fmt.Println("DeleteUser:: Delete a user")
 
-	fmt.Println("CreateUser:: DeleteUser a user")
-	return nil, status.Errorf(codes.Unimplemented, "method GetUserByName not implemented")
+	_, err := s.users.Delete(in.Username)
+	if err != nil {
+		s.serverError(err)
+		return nil, status.Errorf(codes.Internal, "failed to delete user: %v", err)
+	}
+	return &emptypb.Empty{}, nil
 }
+
 func (s *Application) GetUserByName(ctx context.Context, in *GetUserByNameRequest) (*User, error) {
+	fmt.Println("GetUserByName:: GetUserByName")
 
-	fmt.Println("GetUserByName:: GetUserByName ")
-	return nil, status.Errorf(codes.Unimplemented, "method GetUserByName not implemented")
+	userEntity, err := s.users.FindByName(in.Username)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "user not found: %v", err)
+	}
+
+	return &User{
+		Id:         userEntity.Id,
+		Username:   userEntity.Username,
+		FirstName:  userEntity.FirstName,
+		LastName:   userEntity.LastName,
+		Email:      userEntity.Email,
+		Password:   userEntity.Password,
+		Phone:      userEntity.Phone,
+		UserStatus: userEntity.UserStatus,
+	}, nil
 }
+
 func (s *Application) LoginUser(ctx context.Context, in *LoginUserRequest) (*ApiResponse, error) {
-
 	fmt.Println("LoginUser:: Login a user")
-	return nil, status.Errorf(codes.Unimplemented, "method LoginUser not implemented")
+
+	user, err := s.users.FindByName(in.Username)
+	if err != nil || user == nil {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid username or password")
+	}
+
+	if user.Password != in.Password {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid username or password")
+	}
+
+	// In a real app, generate a JWT or session token here
+	sessionId := fmt.Sprintf("logged-in-session-%s", user.Username)
+
+	return &ApiResponse{
+		Code:    200,
+		Type:    "unknown",
+		Message: "logged in user session: " + sessionId,
+	}, nil
 }
+
 func (s *Application) LogoutUser(ctx context.Context, in *emptypb.Empty) (*emptypb.Empty, error) {
-
 	fmt.Println("LogoutUser:: logout user")
-	return nil, status.Errorf(codes.Unimplemented, "method LogoutUser not implemented")
+	// Stateless logout for now
+	return &emptypb.Empty{}, nil
 }
+
 func (s *Application) UpdateUser(ctx context.Context, in *UpdateUserRequest) (*emptypb.Empty, error) {
-
 	fmt.Println("UpdateUser:: Update a user")
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateUser not implemented")
-}
-func (s *Application) UploadFile(ctx context.Context, in *UploadFileRequest) (*ApiResponse, error) {
 
-	fmt.Println("UpdateUser:: Update a user")
-	return nil, status.Errorf(codes.Unimplemented, "method UpdateUser not implemented")
+	if in.Body == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "request body is empty")
+	}
+
+	// Ensure we update the correct user (the one in the URL/request args usually matches the body, but for safety/consistency we use the one passed in request args if available, but UpdateUserRequest in swagger usually passes the name in path and body in body. Let's assume Username in body overrides or Must match. The proto definition usually has Username as a separate field + Body.
+	// Looking at standar proto generated for swagger:
+	// message UpdateUserRequest { string username = 1; User body = 2; }
+	// So we should update the user 'username' with 'body'.
+
+	// Check if the user exists first? Update usually does upsert or strict update.
+	// Let's assum strict update.
+
+	userEntity := UserEntity{
+		Id:       in.Body.Id,
+		Username: in.Username, // Use the username from the path/request, but update with body content? usually body contains the NEW data.
+		// If the username in body is different, it might mean renaming.
+		// For simplicity, let's just save the Body to the database, ensuring we use the right key.
+		// Our Update method in model filters by user.Username. So we need to set userEntity.Username correctly.
+		// If in.Username (path param) is the key, and in.Body.Username is the new name, our model Update method might be too simple (it filters by the struct's username).
+		// Let's assume for now username doesn't change or they match.
+		// Or better, let's trust CreateUserRequest struct from `in.Body`.
+	}
+
+	// Assign fields from Body
+	userEntity.Username = in.Body.Username // This effectively allows renaming if our Update model uses ID? No, our Update uses Username as filter.
+	// If we want to support renaming, we need Find(old) -> Update(new).
+	// Our Update method: `filter := bson.M{"username": user.Username}`. This means we can ONLY update the user if the username matches. We cannot RENAME a user with this implementation of Update in model.
+	// That is acceptable for a basic implementation.
+
+	userEntity.FirstName = in.Body.FirstName
+	userEntity.LastName = in.Body.LastName
+	userEntity.Email = in.Body.Email
+	userEntity.Password = in.Body.Password
+	userEntity.Phone = in.Body.Phone
+	userEntity.UserStatus = in.Body.UserStatus
+
+	_, err := s.users.Update(userEntity)
+	if err != nil {
+		s.serverError(err)
+		return nil, status.Errorf(codes.Internal, "failed to update user: %v", err)
+	}
+
+	return &emptypb.Empty{}, nil
 }

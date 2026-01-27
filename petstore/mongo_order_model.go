@@ -2,7 +2,6 @@ package petstore
 
 import (
 	"context"
-	"errors"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -44,10 +43,6 @@ func (m *OrderModel) FindByID(id string) (*OrderEntity, error) {
 	var order = OrderEntity{}
 	err = m.C.FindOne(context.TODO(), bson.M{"_id": p}).Decode(&order)
 	if err != nil {
-		// Checks if the order was not found
-		if err == mongo.ErrNoDocuments {
-			return nil, errors.New("ErrNoDocuments")
-		}
 		return nil, err
 	}
 

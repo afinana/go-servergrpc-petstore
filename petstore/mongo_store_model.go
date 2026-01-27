@@ -2,114 +2,61 @@ package petstore
 
 import (
 	"context"
-	"errors"
 
 	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// StoreModel represent a mgo database session with a pet data model
+// StoreModel represent a mgo database session with an order data model
 type StoreModel struct {
 	C *mongo.Collection
 }
 
-// All method will be used to get all records from pets table
-func (m *StoreModel) All() ([]Pet, error) {
-	// Define variables
-	ctx := context.TODO()
-	b := []Pet{}
-
-	// Find all pets
-	petCursor, err := m.C.Find(ctx, bson.M{})
+// FindByID will be used to find an order registry by id
+func (m *StoreModel) FindByID(id int64) (*OrderEntity, error) {
+	var order OrderEntity
+	err := m.C.FindOne(context.TODO(), bson.M{"id": id}).Decode(&order)
 	if err != nil {
 		return nil, err
 	}
-	err = petCursor.All(ctx, &b)
-	if err != nil {
-		return nil, err
-	}
-
-	return b, err
+	return &order, nil
 }
 
-// FindByID will be used to find a pet registry by id
-func (m *StoreModel) FindByID(id string) (*PetEntity, error) {
-	p, err := primitive.ObjectIDFromHex(id)
+// Insert will be used to insert a new order registry
+func (m *StoreModel) Insert(order OrderEntity) (*mongo.InsertOneResult, error) {
+	return m.C.InsertOne(context.TODO(), order)
+}
+
+// DeleteByID will be used to delete an order registry by id
+func (m *StoreModel) DeleteByID(id int64) (*mongo.DeleteResult, error) {
+	return m.C.DeleteOne(context.TODO(), bson.M{"id": id})
+}
+
+// GetInventory will be used to get pet inventory by status
+// This logic might belong here or in PetModel. Since it's /store/inventory, it's here.
+// It needs to access the pets collection though.
+func (m *StoreModel) GetInventory(ctx context.Context, petCollection *mongo.Collection) (map[string]int32, error) {
+	pipeline := mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{{Key: "_id", Value: "$status"}, {Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}}}}},
+	}
+
+	cursor, err := petCollection.Aggregate(ctx, pipeline)
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
 
-	// Find pet by id
-	var pet = PetEntity{}
-	err = m.C.FindOne(context.TODO(), bson.M{"_id": p}).Decode(&pet)
-	if err != nil {
-		// Checks if the pet was not found
-		if err == mongo.ErrNoDocuments {
-			return nil, errors.New("ErrNoDocuments")
+	inventory := make(map[string]int32)
+	for cursor.Next(ctx) {
+		var result struct {
+			ID    string `bson:"_id"`
+			Count int32  `bson:"count"`
 		}
-		return nil, err
+		if err := cursor.Decode(&result); err != nil {
+			return nil, err
+		}
+		inventory[result.ID] = result.Count
 	}
 
-	return &pet, nil
-}
-
-// Insert will be used to insert a new pet registry
-func (m *StoreModel) Insert(pet PetEntity) (*mongo.InsertOneResult, error) {
-	return m.C.InsertOne(context.TODO(), pet)
-}
-
-// Insert will be used to insert a new pet registry
-func (m *StoreModel) Update(pet PetEntity) (*mongo.InsertOneResult, error) {
-	return m.C.InsertOne(context.TODO(), pet)
-}
-
-// Delete will be used to delete a pet registry
-func (m *StoreModel) Delete(id string) (*mongo.DeleteResult, error) {
-	p, err := primitive.ObjectIDFromHex(id)
-	if err != nil {
-		return nil, err
-	}
-	return m.C.DeleteOne(context.TODO(), bson.M{"_id": p})
-}
-
-// FindByStatus will be used to find a pet registry by status
-func (m *StoreModel) FindByStatus(status string) ([]PetEntity, error) {
-
-	// begin find
-
-	filter := bson.D{{Key: "status", Value: status}}
-	cursor, err := m.C.Find(context.TODO(), filter)
-	if err != nil {
-		panic(err)
-	}
-	// end find
-
-	var pets []PetEntity
-	if err = cursor.All(context.TODO(), &pets); err != nil {
-		panic(err)
-	}
-
-	return pets, nil
-}
-
-// FindByStatus will be used to find a pet registry by status
-
-func (m *StoreModel) FindBytags(tags []string) ([]PetEntity, error) {
-
-	// begin find
-
-	filter := bson.D{{Key: "tag", Value: tags[0]}}
-	cursor, err := m.C.Find(context.TODO(), filter)
-	if err != nil {
-		panic(err)
-	}
-	// end find
-
-	var pets []PetEntity
-	if err = cursor.All(context.TODO(), &pets); err != nil {
-		panic(err)
-	}
-
-	return pets, nil
+	return inventory, nil
 }

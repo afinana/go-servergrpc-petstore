@@ -1,6 +1,6 @@
 module middleland.net/swaggerapi
 
-go 1.18
+go 1.25
 
 require (
 	go.mongodb.org/mongo-driver v1.11.0

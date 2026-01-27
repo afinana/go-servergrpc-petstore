@@ -12,12 +12,13 @@ package petstore
 
 import (
 	"time"
+
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type OrderEntity struct {
 	ID       primitive.ObjectID `bson:"_id,omitempty"`
-	Id       int64              `json:"id,omitempty"`
+	Id       int64              `json:"id,omitempty" bson:"id,omitempty"`
 	PetId    int64              `json:"petId,omitempty"`
 	Quantity int32              `json:"quantity,omitempty"`
 	ShipDate time.Time          `json:"shipDate,omitempty"`

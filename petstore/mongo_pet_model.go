@@ -2,7 +2,6 @@ package petstore
 
 import (
 	"context"
-	"errors"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -44,10 +43,6 @@ func (m *PetModel) FindByObjectID(id string) (*PetEntity, error) {
 	var pet = PetEntity{}
 	err = m.C.FindOne(context.TODO(), bson.M{"_id": p}).Decode(&pet)
 	if err != nil {
-		// Checks if the pet was not found
-		if err == mongo.ErrNoDocuments {
-			return nil, errors.New("ErrNoDocuments")
-		}
 		return nil, err
 	}
 
@@ -59,10 +54,6 @@ func (m *PetModel) FindByID(id int64) (*PetEntity, error) {
 	var pet = PetEntity{}
 	err := m.C.FindOne(context.TODO(), bson.M{"id": id}).Decode(&pet)
 	if err != nil {
-		// Checks if the pet was not found
-		if err == mongo.ErrNoDocuments {
-			return nil, errors.New("ErrNoDocuments")
-		}
 		return nil, err
 	}
 
@@ -75,8 +66,12 @@ func (m *PetModel) Insert(pet PetEntity) (*mongo.InsertOneResult, error) {
 }
 
 // Insert will be used to insert a new pet registry
-func (m *PetModel) Update(pet PetEntity) (*mongo.InsertOneResult, error) {
-	return m.C.InsertOne(context.TODO(), pet)
+// Update will be used to update a pet registry
+func (m *PetModel) Update(pet PetEntity) (*mongo.UpdateResult, error) {
+	// filter by id
+	filter := bson.M{"id": pet.Id}
+	update := bson.M{"$set": pet}
+	return m.C.UpdateOne(context.TODO(), filter, update)
 }
 
 // Delete will be used to delete a pet registry
@@ -86,6 +81,11 @@ func (m *PetModel) Delete(id string) (*mongo.DeleteResult, error) {
 		return nil, err
 	}
 	return m.C.DeleteOne(context.TODO(), bson.M{"_id": p})
+}
+
+// DeleteByID will be used to delete a pet registry by int64 id
+func (m *PetModel) DeleteByID(id int64) (*mongo.DeleteResult, error) {
+	return m.C.DeleteOne(context.TODO(), bson.M{"id": id})
 }
 
 // FindByStatus will be used to find a pet registry by status
@@ -108,13 +108,13 @@ func (m *PetModel) FindByStatus(status []string) ([]PetEntity, error) {
 
 	cursor, err := m.C.Find(context.TODO(), filter)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	// end find
 
 	var pets []PetEntity
 	if err = cursor.All(context.TODO(), &pets); err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return pets, nil
@@ -141,13 +141,13 @@ func (m *PetModel) FindBytags(tags []string) ([]PetEntity, error) {
 
 	cursor, err := m.C.Find(context.TODO(), filter)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	// end find
 
 	var pets []PetEntity
 	if err = cursor.All(context.TODO(), &pets); err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	return pets, nil
