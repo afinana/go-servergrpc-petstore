@@ -8,12 +8,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// UserModel represent a mgo database session with a user data model
+// UserModel handles database operations for User entities
 type UserModel struct {
 	C *mongo.Collection
 }
 
-// All method will be used to get all records from users table
+// Returns all users in the collection
 func (m *UserModel) All() ([]User, error) {
 	// Define variables
 	ctx := context.TODO()
@@ -32,7 +32,7 @@ func (m *UserModel) All() ([]User, error) {
 	return b, err
 }
 
-// FindByID will be used to find a user registry by id
+// Finds a user by their MongoDB ObjectID
 func (m *UserModel) FindByID(id string) (*User, error) {
 	p, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
@@ -49,12 +49,12 @@ func (m *UserModel) FindByID(id string) (*User, error) {
 	return &user, nil
 }
 
-// Insert will be used to insert a new user registry
+// Inserts a new user into the collection
 func (m *UserModel) Insert(user UserEntity) (*mongo.InsertOneResult, error) {
 	return m.C.InsertOne(context.TODO(), user)
 }
 
-// FindByName will be used to find a user registry by username
+// Finds a user by their username
 func (m *UserModel) FindByName(username string) (*UserEntity, error) {
 	var user UserEntity
 	err := m.C.FindOne(context.TODO(), bson.M{"username": username}).Decode(&user)
@@ -64,7 +64,7 @@ func (m *UserModel) FindByName(username string) (*UserEntity, error) {
 	return &user, nil
 }
 
-// Update will be used to update a user registry
+// Updates an existing user's data
 func (m *UserModel) Update(user UserEntity) (*mongo.UpdateResult, error) {
 	// filter by username, as the API uses username for updates
 	filter := bson.M{"username": user.Username}
@@ -72,12 +72,7 @@ func (m *UserModel) Update(user UserEntity) (*mongo.UpdateResult, error) {
 	return m.C.UpdateOne(context.TODO(), filter, update)
 }
 
-// Delete will be used to delete a user registry
+// Deletes a user by their username
 func (m *UserModel) Delete(username string) (*mongo.DeleteResult, error) {
-	// The API spec implies deletion by username for "DeleteUser", though the previous code had Delete by ID.
-	// The DeleteUserRequest likely has a Username field. Let's check api_user.go or the proto definition later.
-	// For now, I'll add a DeleteByName method or modify Delete to take a query.
-	// Wait, the original Delete took an ID string.
-	// Let's assume for now we need a DeleteByName for the API.
 	return m.C.DeleteOne(context.TODO(), bson.M{"username": username})
 }

@@ -21,122 +21,90 @@ import (
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
+// Adds a new pet to the store
 func (app *Application) AddPet(ctx context.Context, in *AddPetRequest) (*emptypb.Empty, error) {
-
 	out := new(emptypb.Empty)
-	// Define Pets model
-	petRequest := in.GetBody()
-	m := createPetEntity(petRequest)
+	m := createPetEntity(in.GetBody())
 
-	// Insert new Pets
 	insertResult, err := app.pets.Insert(*m)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "AddPet error: %s", err)
 	}
-	//m.id = insertResult.InsertedID.(primitive.ObjectID)
-	app.infoLog.Printf("New pet have been created, id=%s", insertResult.InsertedID)
+	app.infoLog.Printf("New pet created: %s", insertResult.InsertedID)
 
 	return out, nil
-
 }
+
+// Retrieves a pet by its numerical ID
 func (app *Application) GetPetById(ctx context.Context, in *GetPetByIdRequest) (*Pet, error) {
-
-	// Get id from incoming url
-	//id := strconv.FormatInt(in.PetId, 10)
-	//app.infoLog.Printf("Get pet by id=%s \n", in.PetId)
-
 	app.infoLog.Printf("Get pet by id=%d \n", in.PetId)
 
-	// Find Pets by id
 	model, err := app.pets.FindByID(in.PetId)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			app.infoLog.Println("Pets not found")
-			return nil, status.Errorf(codes.Internal, "Pets not found error: %s", err)
+			app.infoLog.Println("Pet not found")
+			return nil, status.Errorf(codes.NotFound, "Pet not found")
 		}
-		// Any other error will send an internal server error
 		app.serverError(err)
+		return nil, status.Errorf(codes.Internal, "GetPetById error: %s", err)
 	}
-	result := createPetDTO(model)
-	return result, nil
-
+	return createPetDTO(model), nil
 }
+
+// Deletes a pet from the store
 func (app *Application) DeletePet(ctx context.Context, in *DeletePetRequest) (*emptypb.Empty, error) {
+	app.infoLog.Printf("Delete pet by id=%d \n", in.PetId)
 
-	out := new(emptypb.Empty)
-	// Define Pets model
-	// id := strconv.FormatInt(in.PetId, 10)
-
-	// Delete Pets by id
 	deleteResult, err := app.pets.DeleteByID(in.PetId)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "DeletePet error: %s", err)
 	}
 
-	app.infoLog.Printf("Have been eliminated %d pet(s)", deleteResult.DeletedCount)
-	return out, nil
+	app.infoLog.Printf("Deleted %d pet(s)", deleteResult.DeletedCount)
+	return &emptypb.Empty{}, nil
 }
 
+// Returns pets filtered by status
 func (app *Application) FindPetsByStatus(ctx context.Context, in *FindPetsByStatusRequest) (*FindPetsByStatusResponse, error) {
+	app.infoLog.Printf("Endpoint Hit: FindPetsByStatus %s \n", in.Status)
 
-	reqStatus := in.Status
-	app.infoLog.Printf("Endpoint Hit: FindPetsByStatus %s \n", reqStatus)
-	var model []PetEntity
-
-	statusList := convertPetStatusList(reqStatus)
-
-	// Find Pets by id
+	statusList := convertPetStatusList(in.Status)
 	model, err := app.pets.FindByStatus(statusList)
 	if err != nil {
-		// Any other error will send an internal server error
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "FindPetsByStatus error: %s", err)
-
 	}
-	result := CreatePetListDTO(model)
 
-	return &FindPetsByStatusResponse{Items: result}, nil
+	return &FindPetsByStatusResponse{Items: CreatePetListDTO(model)}, nil
 }
 
+// Returns pets filtered by tags
 func (app *Application) FindPetsByTags(ctx context.Context, in *FindPetsByTagsRequest) (*FindPetsByTagsResponse, error) {
+	app.infoLog.Printf("Endpoint Hit: FindPetsByTags %s \n", in.Tags)
 
-	tags := in.Tags
-	app.infoLog.Printf("Endpoint Hit: FindPetsByTags %s \n", tags)
-	var model []PetEntity
-
-	// Find Pets by id
-	model, err := app.pets.FindBytags(tags)
+	model, err := app.pets.FindBytags(in.Tags)
 	if err != nil {
-		// Any other error will send an internal server error
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "FindPetsByTags error: %s", err)
-
 	}
-	items := CreatePetListDTO(model)
-	return &FindPetsByTagsResponse{Items: items}, nil
+	return &FindPetsByTagsResponse{Items: CreatePetListDTO(model)}, nil
 }
 
+// Updates an existing pet in the store
 func (app *Application) UpdatePet(ctx context.Context, in *UpdatePetRequest) (*emptypb.Empty, error) {
+	app.infoLog.Printf("Endpoint Hit: UpdatePet %v \n", in.GetBody())
+	m := createPetEntity(in.GetBody())
 
-	out := new(emptypb.Empty)
-	// Define Pets model
-	// Define Pets model
-	petRequest := in.GetBody()
-	app.infoLog.Printf("Endpoint Hit: UpdatePet %s \n", petRequest)
-	m := createPetEntity(petRequest)
-
-	// Update Pet
 	updateResult, err := app.pets.Update(*m)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "UpdatePet error: %s", err)
 	}
 
-	app.infoLog.Printf("Pet updated, matched count=%d, modified count=%d \n", updateResult.MatchedCount, updateResult.ModifiedCount)
-	return out, nil
-
+	app.infoLog.Printf("Pet updated, matched: %d, modified: %d", updateResult.MatchedCount, updateResult.ModifiedCount)
+	return &emptypb.Empty{}, nil
 }
 
 func (app *Application) UpdatePetWithForm(ctx context.Context, in *UpdatePetWithFormRequest) (*emptypb.Empty, error) {

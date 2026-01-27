@@ -4,6 +4,7 @@ import (
 	"time"
 )
 
+// Converts Order DTO to OrderEntity
 func createOrderEntity(in *Order) *OrderEntity {
 	shipDate, _ := time.Parse(time.RFC3339, in.ShipDate)
 	return &OrderEntity{
@@ -16,6 +17,7 @@ func createOrderEntity(in *Order) *OrderEntity {
 	}
 }
 
+// Converts OrderEntity to Order DTO
 func createOrderDTO(in *OrderEntity) *Order {
 	var status Order_OrderStatus
 	if s, ok := Order_OrderStatus_value[in.Status]; ok {

@@ -13,7 +13,6 @@ package petstore
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	codes "google.golang.org/grpc/codes"
@@ -21,20 +20,17 @@ import (
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
+// Deletes an order by its numerical ID
 func (s *Application) DeleteOrder(ctx context.Context, in *DeleteOrderRequest) (*emptypb.Empty, error) {
-	fmt.Printf("DeleteOrder:: id=%d\n", in.OrderId)
-
 	_, err := s.stores.DeleteByID(in.OrderId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to delete order: %v", err)
 	}
-
 	return &emptypb.Empty{}, nil
 }
 
+// Returns pet inventories by status
 func (s *Application) GetInventory(ctx context.Context, in *emptypb.Empty) (*GetInventoryResponse, error) {
-	fmt.Println("GetInventory:: get inventory")
-
 	inventory, err := s.stores.GetInventory(ctx, s.pets.C)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get inventory: %v", err)
@@ -44,27 +40,23 @@ func (s *Application) GetInventory(ctx context.Context, in *emptypb.Empty) (*Get
 	for k, v := range inventory {
 		items = append(items, &MapInventory{Name: k, Value: int64(v)})
 	}
-
 	return &GetInventoryResponse{Items: items}, nil
 }
 
+// Retrieves an order by its numerical ID
 func (s *Application) GetOrderById(ctx context.Context, in *GetOrderByIdRequest) (*Order, error) {
-	fmt.Printf("GetOrderById:: id=%d\n", in.OrderId)
-
 	orderEntity, err := s.stores.FindByID(in.OrderId)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, status.Errorf(codes.NotFound, "order not found: %d", in.OrderId)
+			return nil, status.Errorf(codes.NotFound, "order not found")
 		}
 		return nil, status.Errorf(codes.Internal, "failed to get order: %v", err)
 	}
-
 	return createOrderDTO(orderEntity), nil
 }
 
+// Places a new order for a pet
 func (s *Application) PlaceOrder(ctx context.Context, in *PlaceOrderRequest) (*Order, error) {
-	fmt.Println("PlaceOrder:: place a new order")
-
 	if in.Body == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "order body is required")
 	}
@@ -74,6 +66,5 @@ func (s *Application) PlaceOrder(ctx context.Context, in *PlaceOrderRequest) (*O
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to place order: %v", err)
 	}
-
 	return createOrderDTO(orderEntity), nil
 }
