@@ -112,7 +112,7 @@ func (app *Application) UpdatePetWithForm(ctx context.Context, in *UpdatePetWith
 
 	// Find Pet by id
 	petEntity, err := app.pets.FindByID(in.PetId)
-	app.infoLog.Printf("Endpoint Hit: UpdatePetWithForm %s \n", petEntity)
+	app.infoLog.Printf("Endpoint Hit: UpdatePetWithForm %v \n", petEntity)
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
