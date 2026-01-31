@@ -24,9 +24,10 @@ import (
 // Adds a new pet to the store
 func (app *Application) AddPet(ctx context.Context, in *AddPetRequest) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
+	app.infoLog.Printf("Endpoint Hit: AddPet")
 	m := createPetEntity(in.GetBody())
 
-	insertResult, err := app.pets.Insert(*m)
+	insertResult, err := app.pets.Insert(ctx, *m)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "AddPet error: %s", err)
@@ -38,9 +39,9 @@ func (app *Application) AddPet(ctx context.Context, in *AddPetRequest) (*emptypb
 
 // Retrieves a pet by its numerical ID
 func (app *Application) GetPetById(ctx context.Context, in *GetPetByIdRequest) (*Pet, error) {
-	app.infoLog.Printf("Get pet by id=%d \n", in.PetId)
+	app.infoLog.Printf("Endpoint Hit: GetPetById %d", in.PetId)
 
-	model, err := app.pets.FindByID(in.PetId)
+	model, err := app.pets.FindByID(ctx, in.PetId)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			app.infoLog.Println("Pet not found")
@@ -54,9 +55,9 @@ func (app *Application) GetPetById(ctx context.Context, in *GetPetByIdRequest) (
 
 // Deletes a pet from the store
 func (app *Application) DeletePet(ctx context.Context, in *DeletePetRequest) (*emptypb.Empty, error) {
-	app.infoLog.Printf("Delete pet by id=%d \n", in.PetId)
+	app.infoLog.Printf("Endpoint Hit: DeletePet %d", in.PetId)
 
-	deleteResult, err := app.pets.DeleteByID(in.PetId)
+	deleteResult, err := app.pets.DeleteByID(ctx, in.PetId)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "DeletePet error: %s", err)
@@ -68,10 +69,10 @@ func (app *Application) DeletePet(ctx context.Context, in *DeletePetRequest) (*e
 
 // Returns pets filtered by status
 func (app *Application) FindPetsByStatus(ctx context.Context, in *FindPetsByStatusRequest) (*FindPetsByStatusResponse, error) {
-	app.infoLog.Printf("Endpoint Hit: FindPetsByStatus %s \n", in.Status)
+	app.infoLog.Printf("Endpoint Hit: FindPetsByStatus %s", in.Status)
 
 	statusList := convertPetStatusList(in.Status)
-	model, err := app.pets.FindByStatus(statusList)
+	model, err := app.pets.FindByStatus(ctx, statusList)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "FindPetsByStatus error: %s", err)
@@ -82,9 +83,9 @@ func (app *Application) FindPetsByStatus(ctx context.Context, in *FindPetsByStat
 
 // Returns pets filtered by tags
 func (app *Application) FindPetsByTags(ctx context.Context, in *FindPetsByTagsRequest) (*FindPetsByTagsResponse, error) {
-	app.infoLog.Printf("Endpoint Hit: FindPetsByTags %s \n", in.Tags)
+	app.infoLog.Printf("Endpoint Hit: FindPetsByTags %s", in.Tags)
 
-	model, err := app.pets.FindBytags(in.Tags)
+	model, err := app.pets.FindBytags(ctx, in.Tags)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "FindPetsByTags error: %s", err)
@@ -94,10 +95,10 @@ func (app *Application) FindPetsByTags(ctx context.Context, in *FindPetsByTagsRe
 
 // Updates an existing pet in the store
 func (app *Application) UpdatePet(ctx context.Context, in *UpdatePetRequest) (*emptypb.Empty, error) {
-	app.infoLog.Printf("Endpoint Hit: UpdatePet %v \n", in.GetBody())
+	app.infoLog.Printf("Endpoint Hit: UpdatePet %v", in.GetBody())
 	m := createPetEntity(in.GetBody())
 
-	updateResult, err := app.pets.Update(*m)
+	updateResult, err := app.pets.Update(ctx, *m)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "UpdatePet error: %s", err)
@@ -108,11 +109,10 @@ func (app *Application) UpdatePet(ctx context.Context, in *UpdatePetRequest) (*e
 }
 
 func (app *Application) UpdatePetWithForm(ctx context.Context, in *UpdatePetWithFormRequest) (*emptypb.Empty, error) {
-	app.infoLog.Printf("UpdatePetWithForm: id=%d, name=%s, status=%s", in.PetId, in.Name, in.Status)
+	app.infoLog.Printf("Endpoint Hit: UpdatePetWithForm id=%d, name=%s, status=%s", in.PetId, in.Name, in.Status)
 
 	// Find Pet by id
-	petEntity, err := app.pets.FindByID(in.PetId)
-	app.infoLog.Printf("Endpoint Hit: UpdatePetWithForm %v \n", petEntity)
+	petEntity, err := app.pets.FindByID(ctx, in.PetId)
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
@@ -132,7 +132,7 @@ func (app *Application) UpdatePetWithForm(ctx context.Context, in *UpdatePetWith
 	}
 
 	// Update in DB
-	_, err = app.pets.Update(*petEntity)
+	_, err = app.pets.Update(ctx, *petEntity)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "Error updating pet: %v", err)
@@ -142,16 +142,19 @@ func (app *Application) UpdatePetWithForm(ctx context.Context, in *UpdatePetWith
 }
 
 func (app *Application) UploadFile(ctx context.Context, in *UploadFileRequest) (*ApiResponse, error) {
-	app.infoLog.Printf("UploadFile:: id=%d, metadata=%s\n", in.PetId, in.AdditionalMetadata)
-	// Basic implementation: just acknowledge receipt if data is present
-	if in.File == "" {
-		app.infoLog.Printf("UploadFile:: file data is missing")
-		return nil, status.Errorf(codes.InvalidArgument, "file data is missing")
+	app.infoLog.Printf("Endpoint Hit: UploadFile %d %s", in.PetId, in.AdditionalMetadata)
+	// Validate input parameters
+	if in.PetId == 0 {
+		app.infoLog.Printf("UploadFile:: pet ID is presented")
+		if in.File == "" {
+			app.infoLog.Printf("UploadFile:: file data is missing")
+			return nil, status.Errorf(codes.InvalidArgument, "file data is missing")
+		}
 	}
 
 	return &ApiResponse{
 		Code:    200,
 		Type:    "unknown",
-		Message: fmt.Sprintf("File uploaded for pet %d with metadata %s", in.PetId, in.AdditionalMetadata),
-	}, nil
+		Message: fmt.Sprintf("File uploaded for pet %d with metadata %s", in.PetId, in.AdditionalMetadata)}, nil
+
 }

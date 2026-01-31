@@ -14,9 +14,8 @@ type UserModel struct {
 }
 
 // Returns all users in the collection
-func (m *UserModel) All() ([]User, error) {
+func (m *UserModel) All(ctx context.Context) ([]User, error) {
 	// Define variables
-	ctx := context.TODO()
 	b := []User{}
 
 	// Find all users
@@ -33,7 +32,7 @@ func (m *UserModel) All() ([]User, error) {
 }
 
 // Finds a user by their MongoDB ObjectID
-func (m *UserModel) FindByID(id string) (*User, error) {
+func (m *UserModel) FindByID(ctx context.Context, id string) (*User, error) {
 	p, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, err
@@ -41,7 +40,7 @@ func (m *UserModel) FindByID(id string) (*User, error) {
 
 	// Find user by id
 	var user = User{}
-	err = m.C.FindOne(context.TODO(), bson.M{"_id": p}).Decode(&user)
+	err = m.C.FindOne(ctx, bson.M{"_id": p}).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -50,14 +49,14 @@ func (m *UserModel) FindByID(id string) (*User, error) {
 }
 
 // Inserts a new user into the collection
-func (m *UserModel) Insert(user UserEntity) (*mongo.InsertOneResult, error) {
-	return m.C.InsertOne(context.TODO(), user)
+func (m *UserModel) Insert(ctx context.Context, user UserEntity) (*mongo.InsertOneResult, error) {
+	return m.C.InsertOne(ctx, user)
 }
 
 // Finds a user by their username
-func (m *UserModel) FindByName(username string) (*UserEntity, error) {
+func (m *UserModel) FindByName(ctx context.Context, username string) (*UserEntity, error) {
 	var user UserEntity
-	err := m.C.FindOne(context.TODO(), bson.M{"username": username}).Decode(&user)
+	err := m.C.FindOne(ctx, bson.M{"username": username}).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +64,14 @@ func (m *UserModel) FindByName(username string) (*UserEntity, error) {
 }
 
 // Updates an existing user's data
-func (m *UserModel) Update(user UserEntity) (*mongo.UpdateResult, error) {
+func (m *UserModel) Update(ctx context.Context, user UserEntity) (*mongo.UpdateResult, error) {
 	// filter by username, as the API uses username for updates
 	filter := bson.M{"username": user.Username}
 	update := bson.M{"$set": user}
-	return m.C.UpdateOne(context.TODO(), filter, update)
+	return m.C.UpdateOne(ctx, filter, update)
 }
 
 // Deletes a user by their username
-func (m *UserModel) Delete(username string) (*mongo.DeleteResult, error) {
-	return m.C.DeleteOne(context.TODO(), bson.M{"username": username})
+func (m *UserModel) Delete(ctx context.Context, username string) (*mongo.DeleteResult, error) {
+	return m.C.DeleteOne(ctx, bson.M{"username": username})
 }

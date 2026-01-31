@@ -12,10 +12,10 @@ package petstore
 
 // Map string status to PetStatus enum
 var (
-	Pet_PetStatus_enum = map[string]Pet_PetStatus{
-		"PET_STATUS_AVAILABLE": Pet_PET_STATUS_AVAILABLE,
-		"PET_STATUS_PENDING":   Pet_PET_STATUS_PENDING,
-		"PET_STATUS_SOLD":      Pet_PET_STATUS_SOLD,
+	PetStatusEnum = map[string]Pet_PetStatus{
+		"STATUS_AVAILABLE": Pet_STATUS_AVAILABLE,
+		"STATUS_PENDING":   Pet_STATUS_PENDING,
+		"STATUS_SOLD":      Pet_STATUS_SOLD,
 	}
 )
 
@@ -23,20 +23,12 @@ var (
 func createPetEntity(in *Pet) *PetEntity {
 
 	tags := []TagEntity{}
-	// for loop of tags
 	for _, item := range in.Tags {
 		tags = append(tags, TagEntity{Id: item.Id, Name: item.Name})
-
 	}
 
 	photoUrls := []string{}
-	// for loop of tags
-
 	photoUrls = append(photoUrls, in.PhotoUrls...)
-
-	//for _, item := range in.PhotoUrls {
-	//	photoUrls = append(photoUrls, item)
-	//}
 
 	var categoryEntity *CategoryEntity
 	if in.Category != nil {
@@ -53,10 +45,8 @@ func createPetEntity(in *Pet) *PetEntity {
 func createPetDTO(in *PetEntity) *Pet {
 
 	tags := []*Tag{}
-	// for loop of tags
 	for _, item := range in.Tags {
 		tags = append(tags, &Tag{Id: item.Id, Name: item.Name})
-
 	}
 
 	photoUrls := []string{}
@@ -67,7 +57,7 @@ func createPetDTO(in *PetEntity) *Pet {
 		category = &Category{Id: in.Category.Id, Name: in.Category.Name}
 	}
 
-	statusDTO := Pet_PetStatus_enum[in.Status]
+	statusDTO := PetStatusEnum[in.Status]
 	result := &Pet{Id: in.Id, Category: category,
 		Name: in.Name, Tags: tags, Status: statusDTO, PhotoUrls: photoUrls}
 
@@ -78,10 +68,8 @@ func createPetDTO(in *PetEntity) *Pet {
 func convertPetStatusList(status []FindPetsByStatusRequest_Status) []string {
 
 	result := []string{}
-	// for loop of status
 	for _, item := range status {
 		result = append(result, Pet_PetStatus(item).String())
-
 	}
 
 	return result
@@ -91,10 +79,8 @@ func convertPetStatusList(status []FindPetsByStatusRequest_Status) []string {
 func CreatePetListDTO(pets []PetEntity) []*Pet {
 
 	result := []*Pet{}
-	// for loop of status
 	for _, item := range pets {
 		result = append(result, createPetDTO(&item))
-
 	}
 
 	return result

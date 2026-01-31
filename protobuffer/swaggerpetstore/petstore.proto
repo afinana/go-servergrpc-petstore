@@ -1,0 +1,281 @@
+syntax = "proto3";
+
+package petstore;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "middleland.net/swaggerapi/petstore";
+
+message AddPetRequest {
+  // Pet object that needs to be added to the store
+  Pet body = 1;
+}
+
+message ApiResponse {
+  int32 code = 1;
+  string message = 2;
+  string type = 3;
+}
+
+message Category {
+  int64 id = 1;
+  string name = 2;
+}
+
+message DeletePetRequest {
+  string api_key = 1;
+
+  // Pet id to delete
+  int64 petId = 2;
+}
+
+message FindPetsByStatusRequest {
+  enum Status {
+    STATUS_AVAILABLE = 0;
+    STATUS_PENDING = 1;
+    STATUS_SOLD = 2;
+  }
+
+  // Status values that need to be considered for filter
+  repeated Status status = 1;
+}
+
+message FindPetsByStatusResponse {
+  repeated Pet items = 1;
+}
+
+message FindPetsByTagsRequest {
+  // Tags to filter by
+  repeated string tags = 1;
+}
+
+message FindPetsByTagsResponse {
+  repeated Pet items = 1;
+}
+
+message GetPetByIdRequest {
+  // ID of pet to return
+  int64 petId = 1;
+}
+
+message Order {
+  enum OrderStatus {
+    ORDER_STATUS_PLACED = 0;
+    ORDER_STATUS_APPROVED = 1;
+    ORDER_STATUS_DELIVERED = 2;
+  }
+
+  bool complete = 1;
+  int64 id = 2;
+  int64 petId = 3;
+  int32 quantity = 4;
+  string shipDate = 5;
+
+  // Order Status
+  OrderStatus status = 6;
+}
+
+message DeleteOrderRequest {
+  // ID of the order that needs to be deleted
+  int64 orderId = 1;
+}
+
+message GetInventoryResponse {
+  repeated MapInventory items = 1;
+}
+
+message MapInventory {
+  string name = 1;
+  int64 value = 2;
+}
+
+message GetOrderByIdRequest {
+  // ID of pet that needs to be fetched
+  int64 orderId = 1;
+}
+
+message PlaceOrderRequest {
+  // order placed for purchasing the pet
+  Order body = 1;
+}
+
+message Pet {
+  enum PetStatus {
+    STATUS_AVAILABLE = 0;
+    STATUS_PENDING = 1;
+    STATUS_SOLD = 2;
+  }
+
+  Category category = 1;
+  int64 id = 2;
+  string name = 3;
+  repeated string photoUrls = 4;
+
+  // pet status in the store
+  PetStatus status = 5;
+  repeated Tag tags = 6;
+}
+
+message Tag {
+  int64 id = 1;
+  string name = 2;
+}
+
+message UpdatePetRequest {
+  // Pet object that needs to be added to the store
+  Pet body = 1;
+}
+
+message UpdatePetWithFormRequest {
+  // Updated name of the pet
+  string name = 1;
+
+  // ID of pet that needs to be updated
+  int64 petId = 2;
+
+  // Updated status of the pet
+  string status = 3;
+}
+
+message UploadFileRequest {
+  // Additional data to pass to server
+  string additionalMetadata = 1;
+
+  // file to upload
+  string file = 2;
+
+  // ID of pet to update
+  int64 petId = 3;
+}
+
+message User {
+  int64 id = 1;
+  string username = 2;
+  string firstName = 3;
+  string lastName = 4;
+  string email = 5;
+  string password = 6;
+  string phone = 7;
+  int32 userStatus = 8;
+}
+
+message CreateUserRequest {
+  // Created user object
+  User body = 1;
+}
+
+message CreateUsersWithArrayInputRequest {
+  // List of user object
+  repeated User body = 1;
+}
+
+message CreateUsersWithListInputRequest {
+  // List of user object
+  repeated User body = 1;
+}
+
+message DeleteUserRequest {
+  // The name that needs to be deleted
+  string username = 1;
+}
+
+message GetUserByNameRequest {
+  // The name that needs to be fetched. Use user1 for testing.
+  string username = 1;
+}
+
+message LoginUserRequest {
+  // The password for login in clear text
+  string password = 1;
+
+  // The user name for login
+  string username = 2;
+}
+
+message UpdateUserRequest {
+  // Updated user object
+  User body = 1;
+
+  // name that need to be updated
+  string username = 2;
+}
+
+service SwaggerPetstoreService {
+  // Add a new pet to the store
+  rpc AddPet(AddPetRequest) returns (google.protobuf.Empty) {}
+
+  // Delete purchase order by ID
+  //
+  // For valid response try integer IDs with positive integer value. Negative or non-integer values will generate API errors
+  rpc DeleteOrder(DeleteOrderRequest) returns (google.protobuf.Empty) {}
+
+  // Deletes a pet
+  rpc DeletePet(DeletePetRequest) returns (google.protobuf.Empty) {}
+
+  // Finds Pets by status
+  //
+  // Multiple status values can be provided with comma separated strings
+  rpc FindPetsByStatus(FindPetsByStatusRequest) returns (FindPetsByStatusResponse) {}
+
+  // Finds Pets by tags
+  //
+  // Multiple tags can be provided with comma separated strings. Use tag1, tag2, tag3 for testing.
+  rpc FindPetsByTags(FindPetsByTagsRequest) returns (FindPetsByTagsResponse) {}
+
+  // Returns pet inventories by status
+  //
+  // Returns a map of status codes to quantities
+  rpc GetInventory(google.protobuf.Empty) returns (GetInventoryResponse) {}
+
+  // Find purchase order by ID
+  //
+  // For valid response try integer IDs with value >= 1 and <= 10. Other values will generated exceptions
+  rpc GetOrderById(GetOrderByIdRequest) returns (Order) {}
+
+  // Find pet by ID
+  //
+  // Returns a single pet
+  rpc GetPetById(GetPetByIdRequest) returns (Pet) {}
+
+  // Update an existing pet
+  rpc UpdatePet(UpdatePetRequest) returns (google.protobuf.Empty) {}
+
+  // Updates a pet in the store with form data
+  rpc UpdatePetWithForm(UpdatePetWithFormRequest) returns (google.protobuf.Empty) {}
+
+  // uploads an image
+  rpc UploadFile(UploadFileRequest) returns (ApiResponse) {}
+
+  // Create user
+  //
+  // This can only be done by the logged in user.
+  rpc CreateUser(CreateUserRequest) returns (google.protobuf.Empty) {}
+
+  // Creates list of users with given input array
+  rpc CreateUsersWithArrayInput(CreateUsersWithArrayInputRequest) returns (google.protobuf.Empty) {}
+
+  // Creates list of users with given input array
+  rpc CreateUsersWithListInput(CreateUsersWithListInputRequest) returns (google.protobuf.Empty) {}
+
+  // Delete user
+  //
+  // This can only be done by the logged in user.
+  rpc DeleteUser(DeleteUserRequest) returns (google.protobuf.Empty) {}
+
+  // Get user by user name
+  rpc GetUserByName(GetUserByNameRequest) returns (User) {}
+
+  // Logs user into the system
+  rpc LoginUser(LoginUserRequest) returns (ApiResponse) {}
+
+  // Logs out current logged in user session
+  rpc LogoutUser(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+
+  // Place an order for a pet
+  rpc PlaceOrder(PlaceOrderRequest) returns (Order) {}
+
+  // Updated user
+  //
+  // This can only be done by the logged in user.
+  rpc UpdateUser(UpdateUserRequest) returns (google.protobuf.Empty) {}
+}

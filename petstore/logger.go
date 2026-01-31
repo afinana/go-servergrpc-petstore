@@ -11,17 +11,55 @@
 package petstore
 
 import (
+	"io"
 	"log"
-	"time"
 )
 
-func Logger(method string, data string) {
+const (
+	ColorReset  = "\033[0m"
+	ColorRed    = "\033[31m"
+	ColorGreen  = "\033[32m"
+	ColorYellow = "\033[33m"
+	ColorBlue   = "\033[34m"
+	ColorPurple = "\033[35m"
+	ColorCyan   = "\033[36m"
+	ColorGray   = "\033[37m"
+)
 
-	start := time.Now()
+// ColoredWriter wraps an io.Writer and adds color to the output
+type ColoredWriter struct {
+	W     io.Writer
+	Color string
+}
+
+func (cw *ColoredWriter) Write(p []byte) (n int, err error) {
+	cw.W.Write([]byte(cw.Color))
+	n, err = cw.W.Write(p)
+	cw.W.Write([]byte(ColorReset))
+	return
+}
+
+func Logger(level string, method string, data string) {
+	var colorStart string
+	var colorReset = ColorReset
+
+	switch level {
+	case "INFO":
+		colorStart = ColorGreen
+	case "DEBUG":
+		colorStart = ColorBlue
+	case "ERROR":
+		colorStart = ColorRed
+	default:
+		colorStart = ColorReset
+	}
+
+	// Use standard log but include color codes in the message
 	log.Printf(
-		"%s %s %s",
+		"%s[%s] %s %s%s",
+		colorStart,
+		level,
 		method,
 		data,
-		time.Since(start))
-
+		colorReset)
 }

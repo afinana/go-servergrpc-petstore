@@ -37,8 +37,8 @@ func main() {
 	flag.Parse()
 
 	// Create logger for writing information and error messages.
-	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
-	errLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+	infoLog := log.New(&api.ColoredWriter{W: os.Stdout, Color: api.ColorGreen}, "INFO\t", log.Ldate|log.Ltime)
+	errLog := log.New(&api.ColoredWriter{W: os.Stderr, Color: api.ColorRed}, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
 	// Create mongo client configuration
 	co := options.Client().ApplyURI(*mongoURI)
