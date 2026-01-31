@@ -13,9 +13,9 @@ type StoreModel struct {
 }
 
 // Finds an order by its numerical ID
-func (m *StoreModel) FindByID(id int64) (*OrderEntity, error) {
+func (m *StoreModel) FindByID(ctx context.Context, id int64) (*OrderEntity, error) {
 	var order OrderEntity
-	err := m.C.FindOne(context.TODO(), bson.M{"id": id}).Decode(&order)
+	err := m.C.FindOne(ctx, bson.M{"id": id}).Decode(&order)
 	if err != nil {
 		return nil, err
 	}
@@ -23,13 +23,13 @@ func (m *StoreModel) FindByID(id int64) (*OrderEntity, error) {
 }
 
 // Inserts a new order into the collection
-func (m *StoreModel) Insert(order OrderEntity) (*mongo.InsertOneResult, error) {
-	return m.C.InsertOne(context.TODO(), order)
+func (m *StoreModel) Insert(ctx context.Context, order OrderEntity) (*mongo.InsertOneResult, error) {
+	return m.C.InsertOne(ctx, order)
 }
 
 // Deletes an order by its numerical ID
-func (m *StoreModel) DeleteByID(id int64) (*mongo.DeleteResult, error) {
-	return m.C.DeleteOne(context.TODO(), bson.M{"id": id})
+func (m *StoreModel) DeleteByID(ctx context.Context, id int64) (*mongo.DeleteResult, error) {
+	return m.C.DeleteOne(ctx, bson.M{"id": id})
 }
 
 // Aggregates pet inventory by status

@@ -20,6 +20,7 @@ env:
   USER_ACCOUNT: ${{ secrets.DOCKERHUB_USERNAME  }}
   USER_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD  }}  
   IMAGE_NAME: go-servergrpc-petstore
+  TAG_NAME: mongo
 
 
 jobs:
@@ -69,7 +70,7 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ env.USER_ACCOUNT }}/${{ env.IMAGE_NAME }}:latest
+          tags: ${{ env.USER_ACCOUNT }}/${{ env.IMAGE_NAME }}:{{TAG_NAME}}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

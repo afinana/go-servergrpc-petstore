@@ -14,12 +14,18 @@ RUN go mod download
 COPY petstore ./petstore
 COPY main.go .
 
-# Build statically linked binary
-RUN CGO_ENABLED=0 GOOS=linux go build -o /petstore-server
+# Build statically linked binary with size optimizations
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /petstore-server
 
 ## Deploy
 # Use static-debian12 for a smaller, secure base image
 FROM gcr.io/distroless/static-debian12
+
+# OpenContainers specific labels
+LABEL org.opencontainers.image.title="Go gRPC Petstore Server"
+LABEL org.opencontainers.image.description="A sample petstore server written in Go with gRPC and MongoDB"
+LABEL org.opencontainers.image.source="https://github.com/middleland/go-servergrpc-petstore"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 WORKDIR /
 

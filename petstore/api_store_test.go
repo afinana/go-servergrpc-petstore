@@ -54,7 +54,7 @@ func TestStoreLifecycle(t *testing.T) {
 	// 3. Get Inventory
 	t.Run("GetInventory", func(t *testing.T) {
 		// Add a pet to ensure inventory has something
-		_, err := testApp.AddPet(ctx, &AddPetRequest{Body: &Pet{Id: 9999, Status: Pet_PET_STATUS_AVAILABLE}})
+		_, err := testApp.AddPet(ctx, &AddPetRequest{Body: &Pet{Id: 9999, Status: Pet_STATUS_AVAILABLE}})
 		if err != nil {
 			t.Fatalf("AddPet for inventory test failed: %v", err)
 		}
@@ -66,7 +66,7 @@ func TestStoreLifecycle(t *testing.T) {
 
 		found := false
 		for _, item := range resp.Items {
-			if item.Name == "PET_STATUS_AVAILABLE" && item.Value > 0 {
+			if item.Name == "STATUS_AVAILABLE" && item.Value > 0 {
 				found = true
 				break
 			}

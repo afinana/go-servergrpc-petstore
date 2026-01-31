@@ -19,8 +19,9 @@ import (
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Creates a new user
+// CreateUser creates a new user.
 func (s *Application) CreateUser(ctx context.Context, in *CreateUserRequest) (*emptypb.Empty, error) {
+	s.infoLog.Printf("Endpoint Hit: CreateUser %s", in.Body.Username)
 	if in.Body == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "request body is empty")
 	}
@@ -36,7 +37,7 @@ func (s *Application) CreateUser(ctx context.Context, in *CreateUserRequest) (*e
 		UserStatus: in.Body.UserStatus,
 	}
 
-	_, err := s.users.Insert(userEntity)
+	_, err := s.users.Insert(ctx, userEntity)
 	if err != nil {
 		s.serverError(err)
 		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
@@ -45,8 +46,9 @@ func (s *Application) CreateUser(ctx context.Context, in *CreateUserRequest) (*e
 	return &emptypb.Empty{}, nil
 }
 
-// Batch creates users from an array input
+// CreateUsersWithArrayInput batch creates users from an array input.
 func (s *Application) CreateUsersWithArrayInput(ctx context.Context, in *CreateUsersWithArrayInputRequest) (*emptypb.Empty, error) {
+	s.infoLog.Printf("Endpoint Hit: CreateUsersWithArrayInput")
 	for _, user := range in.Body {
 		userEntity := UserEntity{
 			Id:         user.Id,
@@ -58,7 +60,7 @@ func (s *Application) CreateUsersWithArrayInput(ctx context.Context, in *CreateU
 			Phone:      user.Phone,
 			UserStatus: user.UserStatus,
 		}
-		_, err := s.users.Insert(userEntity)
+		_, err := s.users.Insert(ctx, userEntity)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create user %s: %v", user.Username, err)
 		}
@@ -66,8 +68,9 @@ func (s *Application) CreateUsersWithArrayInput(ctx context.Context, in *CreateU
 	return &emptypb.Empty{}, nil
 }
 
-// Batch creates users from a list input
+// CreateUsersWithListInput batch creates users from a list input.
 func (s *Application) CreateUsersWithListInput(ctx context.Context, in *CreateUsersWithListInputRequest) (*emptypb.Empty, error) {
+	s.infoLog.Printf("Endpoint Hit: CreateUsersWithListInput")
 	for _, user := range in.Body {
 		userEntity := UserEntity{
 			Id:         user.Id,
@@ -79,7 +82,7 @@ func (s *Application) CreateUsersWithListInput(ctx context.Context, in *CreateUs
 			Phone:      user.Phone,
 			UserStatus: user.UserStatus,
 		}
-		_, err := s.users.Insert(userEntity)
+		_, err := s.users.Insert(ctx, userEntity)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create user %s: %v", user.Username, err)
 		}
@@ -87,9 +90,10 @@ func (s *Application) CreateUsersWithListInput(ctx context.Context, in *CreateUs
 	return &emptypb.Empty{}, nil
 }
 
-// Deletes a user by username
+// DeleteUser deletes a user by username.
 func (s *Application) DeleteUser(ctx context.Context, in *DeleteUserRequest) (*emptypb.Empty, error) {
-	_, err := s.users.Delete(in.Username)
+	s.infoLog.Printf("Endpoint Hit: DeleteUser %s", in.Username)
+	_, err := s.users.Delete(ctx, in.Username)
 	if err != nil {
 		s.serverError(err)
 		return nil, status.Errorf(codes.Internal, "failed to delete user: %v", err)
@@ -97,9 +101,10 @@ func (s *Application) DeleteUser(ctx context.Context, in *DeleteUserRequest) (*e
 	return &emptypb.Empty{}, nil
 }
 
-// Fetches a user by their username
+// GetUserByName fetches a user by their username.
 func (s *Application) GetUserByName(ctx context.Context, in *GetUserByNameRequest) (*User, error) {
-	userEntity, err := s.users.FindByName(in.Username)
+	s.infoLog.Printf("Endpoint Hit: GetUserByName %s", in.Username)
+	userEntity, err := s.users.FindByName(ctx, in.Username)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "user not found: %v", err)
 	}
@@ -116,9 +121,10 @@ func (s *Application) GetUserByName(ctx context.Context, in *GetUserByNameReques
 	}, nil
 }
 
-// Authenticates a user and starts a session
+// LoginUser authenticates a user and starts a session.
 func (s *Application) LoginUser(ctx context.Context, in *LoginUserRequest) (*ApiResponse, error) {
-	user, err := s.users.FindByName(in.Username)
+	s.infoLog.Printf("Endpoint Hit: LoginUser %s", in.Username)
+	user, err := s.users.FindByName(ctx, in.Username)
 	if err != nil || user == nil || user.Password != in.Password {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid username or password")
 	}
@@ -131,13 +137,15 @@ func (s *Application) LoginUser(ctx context.Context, in *LoginUserRequest) (*Api
 	}, nil
 }
 
-// Logs out the current user session
+// LogoutUser logs out the current user session.
 func (s *Application) LogoutUser(ctx context.Context, in *emptypb.Empty) (*emptypb.Empty, error) {
+	s.infoLog.Printf("Endpoint Hit: LogoutUser")
 	return &emptypb.Empty{}, nil
 }
 
-// Updates an existing user's information
+// UpdateUser updates an existing user's information.
 func (s *Application) UpdateUser(ctx context.Context, in *UpdateUserRequest) (*emptypb.Empty, error) {
+	s.infoLog.Printf("Endpoint Hit: UpdateUser %s", in.Username)
 	if in.Body == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "request body is empty")
 	}
@@ -153,7 +161,7 @@ func (s *Application) UpdateUser(ctx context.Context, in *UpdateUserRequest) (*e
 		UserStatus: in.Body.UserStatus,
 	}
 
-	_, err := s.users.Update(userEntity)
+	_, err := s.users.Update(ctx, userEntity)
 	if err != nil {
 		s.serverError(err)
 		return nil, status.Errorf(codes.Internal, "failed to update user: %v", err)

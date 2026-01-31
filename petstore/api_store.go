@@ -20,17 +20,19 @@ import (
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Deletes an order by its numerical ID
+// DeleteOrder deletes an order by its numerical ID.
 func (s *Application) DeleteOrder(ctx context.Context, in *DeleteOrderRequest) (*emptypb.Empty, error) {
-	_, err := s.stores.DeleteByID(in.OrderId)
+	s.infoLog.Printf("Endpoint Hit: DeleteOrder %d", in.OrderId)
+	_, err := s.stores.DeleteByID(ctx, in.OrderId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to delete order: %v", err)
 	}
 	return &emptypb.Empty{}, nil
 }
 
-// Returns pet inventories by status
+// GetInventory returns pet inventories by status.
 func (s *Application) GetInventory(ctx context.Context, in *emptypb.Empty) (*GetInventoryResponse, error) {
+	s.infoLog.Printf("Endpoint Hit: GetInventory")
 	inventory, err := s.stores.GetInventory(ctx, s.pets.C)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get inventory: %v", err)
@@ -43,9 +45,10 @@ func (s *Application) GetInventory(ctx context.Context, in *emptypb.Empty) (*Get
 	return &GetInventoryResponse{Items: items}, nil
 }
 
-// Retrieves an order by its numerical ID
+// GetOrderById retrieves an order by its numerical ID.
 func (s *Application) GetOrderById(ctx context.Context, in *GetOrderByIdRequest) (*Order, error) {
-	orderEntity, err := s.stores.FindByID(in.OrderId)
+	s.infoLog.Printf("Endpoint Hit: GetOrderById %d", in.OrderId)
+	orderEntity, err := s.stores.FindByID(ctx, in.OrderId)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, status.Errorf(codes.NotFound, "order not found")
@@ -55,14 +58,15 @@ func (s *Application) GetOrderById(ctx context.Context, in *GetOrderByIdRequest)
 	return createOrderDTO(orderEntity), nil
 }
 
-// Places a new order for a pet
+// PlaceOrder places a new order for a pet.
 func (s *Application) PlaceOrder(ctx context.Context, in *PlaceOrderRequest) (*Order, error) {
+	s.infoLog.Printf("Endpoint Hit: PlaceOrder %v", in.Body)
 	if in.Body == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "order body is required")
 	}
 
 	orderEntity := createOrderEntity(in.Body)
-	_, err := s.stores.Insert(*orderEntity)
+	_, err := s.stores.Insert(ctx, *orderEntity)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to place order: %v", err)
 	}

@@ -18,11 +18,12 @@ func TestAddPetAndGetPetById(t *testing.T) {
 
 	// 1. Add Pet
 	petID := int64(1001)
+
 	petName := "Fluffy"
 	pet := &Pet{
 		Id:        petID,
 		Name:      petName,
-		Status:    Pet_PET_STATUS_AVAILABLE,
+		Status:    Pet_STATUS_AVAILABLE,
 		PhotoUrls: []string{"url1", "url2"},
 		Tags:      []*Tag{{Id: 1, Name: "cute"}},
 	}
@@ -63,9 +64,9 @@ func TestFindPetsByStatus(t *testing.T) {
 
 	// Add a few pets with different statuses
 	pets := []*Pet{
-		{Id: 2001, Name: "P1", Status: Pet_PET_STATUS_AVAILABLE},
-		{Id: 2002, Name: "P2", Status: Pet_PET_STATUS_PENDING},
-		{Id: 2003, Name: "P3", Status: Pet_PET_STATUS_SOLD},
+		{Id: 2001, Name: "P1", Status: Pet_STATUS_AVAILABLE},
+		{Id: 2002, Name: "P2", Status: Pet_STATUS_PENDING},
+		{Id: 2003, Name: "P3", Status: Pet_STATUS_SOLD},
 	}
 
 	for _, p := range pets {
@@ -149,7 +150,7 @@ func TestUpdatePetWithForm(t *testing.T) {
 	pet := &Pet{
 		Id:     petID,
 		Name:   petName,
-		Status: Pet_PET_STATUS_AVAILABLE,
+		Status: Pet_STATUS_AVAILABLE,
 	}
 	_, err = testApp.AddPet(ctx, &AddPetRequest{Body: pet})
 	if err != nil {
@@ -158,7 +159,7 @@ func TestUpdatePetWithForm(t *testing.T) {
 
 	// 2. Update Pet With Form
 	updatedName := "UpdatedName"
-	updatedStatus := "PET_STATUS_SOLD" // string status as per proto definition for UpdatePetWithForm
+	updatedStatus := "STATUS_SOLD" // string status as per proto definition for UpdatePetWithForm
 
 	req := &UpdatePetWithFormRequest{
 		PetId:  petID,
@@ -189,7 +190,7 @@ func TestUpdatePetWithForm(t *testing.T) {
 	// The retrieval maps DB string to enum.
 	// "sold" maps to Pet_PET_STATUS_SOLD (confirmed in pet_mapper.go usually)
 	// Let's verify if the status enum matches.
-	if retrievedPet.Status != Pet_PET_STATUS_SOLD {
+	if retrievedPet.Status != Pet_STATUS_SOLD {
 		t.Errorf("Expected status SOLD, got %v", retrievedPet.Status)
 	}
 }
