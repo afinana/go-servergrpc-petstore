@@ -21,7 +21,7 @@ import (
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Adds a new pet to the store
+// AddPet adds a new pet to the store.
 func (app *Application) AddPet(ctx context.Context, in *AddPetRequest) (*emptypb.Empty, error) {
 	out := new(emptypb.Empty)
 	app.infoLog.Printf("Endpoint Hit: AddPet")
@@ -37,7 +37,7 @@ func (app *Application) AddPet(ctx context.Context, in *AddPetRequest) (*emptypb
 	return out, nil
 }
 
-// Retrieves a pet by its numerical ID
+// GetPetById retrieves a pet by its numerical ID.
 func (app *Application) GetPetById(ctx context.Context, in *GetPetByIdRequest) (*Pet, error) {
 	app.infoLog.Printf("Endpoint Hit: GetPetById %d", in.PetId)
 
@@ -53,7 +53,7 @@ func (app *Application) GetPetById(ctx context.Context, in *GetPetByIdRequest) (
 	return createPetDTO(model), nil
 }
 
-// Deletes a pet from the store
+// DeletePet deletes a pet from the store.
 func (app *Application) DeletePet(ctx context.Context, in *DeletePetRequest) (*emptypb.Empty, error) {
 	app.infoLog.Printf("Endpoint Hit: DeletePet %d", in.PetId)
 
@@ -67,7 +67,7 @@ func (app *Application) DeletePet(ctx context.Context, in *DeletePetRequest) (*e
 	return &emptypb.Empty{}, nil
 }
 
-// Returns pets filtered by status
+// FindPetsByStatus returns pets filtered by status.
 func (app *Application) FindPetsByStatus(ctx context.Context, in *FindPetsByStatusRequest) (*FindPetsByStatusResponse, error) {
 	app.infoLog.Printf("Endpoint Hit: FindPetsByStatus %s", in.Status)
 
@@ -81,7 +81,7 @@ func (app *Application) FindPetsByStatus(ctx context.Context, in *FindPetsByStat
 	return &FindPetsByStatusResponse{Items: CreatePetListDTO(model)}, nil
 }
 
-// Returns pets filtered by tags
+// FindPetsByTags returns pets filtered by tags.
 func (app *Application) FindPetsByTags(ctx context.Context, in *FindPetsByTagsRequest) (*FindPetsByTagsResponse, error) {
 	app.infoLog.Printf("Endpoint Hit: FindPetsByTags %s", in.Tags)
 
@@ -93,7 +93,7 @@ func (app *Application) FindPetsByTags(ctx context.Context, in *FindPetsByTagsRe
 	return &FindPetsByTagsResponse{Items: CreatePetListDTO(model)}, nil
 }
 
-// Updates an existing pet in the store
+// UpdatePet updates an existing pet in the store.
 func (app *Application) UpdatePet(ctx context.Context, in *UpdatePetRequest) (*emptypb.Empty, error) {
 	app.infoLog.Printf("Endpoint Hit: UpdatePet %v", in.GetBody())
 	m := createPetEntity(in.GetBody())
@@ -108,6 +108,7 @@ func (app *Application) UpdatePet(ctx context.Context, in *UpdatePetRequest) (*e
 	return &emptypb.Empty{}, nil
 }
 
+// UpdatePetWithForm updates a pet's name and/or status using form data.
 func (app *Application) UpdatePetWithForm(ctx context.Context, in *UpdatePetWithFormRequest) (*emptypb.Empty, error) {
 	app.infoLog.Printf("Endpoint Hit: UpdatePetWithForm id=%d, name=%s, status=%s", in.PetId, in.Name, in.Status)
 
@@ -141,6 +142,7 @@ func (app *Application) UpdatePetWithForm(ctx context.Context, in *UpdatePetWith
 	return &emptypb.Empty{}, nil
 }
 
+// UploadFile uploads a file for a pet and returns an ApiResponse.
 func (app *Application) UploadFile(ctx context.Context, in *UploadFileRequest) (*ApiResponse, error) {
 	app.infoLog.Printf("Endpoint Hit: UploadFile %d %s", in.PetId, in.AdditionalMetadata)
 	// Validate input parameters
