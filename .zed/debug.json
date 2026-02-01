@@ -16,7 +16,7 @@
         "request": "launch",
         "mode": "debug",
         // For Delve, the program can be a package name
-        "program": "./cmd/server"
+        "program": "./main.go"
         // "args": [],
         // "buildFlags": [],
     }
