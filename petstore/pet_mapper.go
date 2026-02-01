@@ -10,132 +10,77 @@
 
 package petstore
 
-/**
-DTO:
-
-type Pet struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Category  *Category `protobuf:"bytes,1,opt,name=category,proto3" json:"category,omitempty"`
-	Id        int64     `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
-	Name      string    `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	PhotoUrls []string  `protobuf:"bytes,4,rep,name=photoUrls,proto3" json:"photoUrls,omitempty"`
-	// pet status in the store
-	Status Pet_PetStatus `protobuf:"varint,5,opt,name=status,proto3,enum=swaggerpetstore.Pet_PetStatus" json:"status,omitempty"`
-	Tags   []*Tag        `protobuf:"bytes,6,rep,name=tags,proto3" json:"tags,omitempty"`
-}
-type Category struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Id   int64  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-}
-type Tag struct {
-	state         protoimpl.MessageState
-	sizeCache     protoimpl.SizeCache
-	unknownFields protoimpl.UnknownFields
-
-	Id   int64  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-}
-
-Entity:
-
-type PetEntity struct {
-	ID        primitive.ObjectID `json:"ID" bson:"_id,omitempty"`
-	Id        int64              `json:"id,omitempty"`
-	Category  *CategoryEntity    `json:"category,omitempty"`
-	Name      string             `json:"name"`
-	PhotoUrls []string           `json:"photoUrls"`
-	Tags      []TagEntity        `json:"tags,omitempty"`
-	// pet status in the store
-	Status string `json:"status,omitempty"`
-}
-type CategoryEntity struct {
-	Id   int64  `json:"id,omitempty"`
-	Name string `json:"name,omitempty"`
-}
-
-
-**/
+// Map string status to PetStatus enum
 var (
-	Pet_PetStatus_enum = map[string]Pet_PetStatus{
-		"PET_STATUS_AVAILABLE": Pet_PET_STATUS_AVAILABLE,
-		"PET_STATUS_PENDING":   Pet_PET_STATUS_PENDING,
-		"PET_STATUS_SOLD":      Pet_PET_STATUS_SOLD,
+	PetStatusEnum = map[string]Pet_PetStatus{
+		"STATUS_AVAILABLE": Pet_STATUS_AVAILABLE,
+		"STATUS_PENDING":   Pet_STATUS_PENDING,
+		"STATUS_SOLD":      Pet_STATUS_SOLD,
 	}
 )
 
+// Converts Pet DTO to PetEntity
 func createPetEntity(in *Pet) *PetEntity {
 
 	tags := []TagEntity{}
-	// for loop of tags
 	for _, item := range in.Tags {
 		tags = append(tags, TagEntity{Id: item.Id, Name: item.Name})
-
 	}
 
 	photoUrls := []string{}
-	// for loop of tags
-
 	photoUrls = append(photoUrls, in.PhotoUrls...)
 
-	//for _, item := range in.PhotoUrls {
-	//	photoUrls = append(photoUrls, item)
-	//}
+	var categoryEntity *CategoryEntity
+	if in.Category != nil {
+		categoryEntity = &CategoryEntity{Id: in.Category.Id, Name: in.Category.Name}
+	}
 
-	categoryDTO := in.Category
-	result := &PetEntity{Id: in.Id, Category: &CategoryEntity{Id: categoryDTO.Id, Name: categoryDTO.Name},
-		Name: categoryDTO.Name, Tags: tags, Status: in.Status.String(), PhotoUrls: photoUrls}
+	result := &PetEntity{Id: in.Id, Category: categoryEntity,
+		Name: in.Name, Tags: tags, Status: in.Status.String(), PhotoUrls: photoUrls}
 
 	return result
 }
 
-// CreatePetDTO
-
+// Converts PetEntity to Pet DTO
 func createPetDTO(in *PetEntity) *Pet {
 
 	tags := []*Tag{}
-	// for loop of tags
 	for _, item := range in.Tags {
 		tags = append(tags, &Tag{Id: item.Id, Name: item.Name})
-
 	}
 
 	photoUrls := []string{}
 	photoUrls = append(photoUrls, in.PhotoUrls...)
 
-	categoryDTO := in.Category
-	statusDTO := Pet_PetStatus_enum[in.Status]
-	result := &Pet{Id: in.Id, Category: &Category{Id: categoryDTO.Id, Name: categoryDTO.Name},
-		Name: categoryDTO.Name, Tags: tags, Status: statusDTO, PhotoUrls: photoUrls}
+	var category *Category
+	if in.Category != nil {
+		category = &Category{Id: in.Category.Id, Name: in.Category.Name}
+	}
+
+	statusDTO := PetStatusEnum[in.Status]
+	result := &Pet{Id: in.Id, Category: category,
+		Name: in.Name, Tags: tags, Status: statusDTO, PhotoUrls: photoUrls}
 
 	return result
 }
 
+// Converts status enum list to string list
 func convertPetStatusList(status []FindPetsByStatusRequest_Status) []string {
 
 	result := []string{}
-	// for loop of status
 	for _, item := range status {
-		result = append(result, item.String())
-
+		result = append(result, Pet_PetStatus(item).String())
 	}
 
 	return result
 }
 
+// Converts list of PetEntities to list of Pet DTOs
 func CreatePetListDTO(pets []PetEntity) []*Pet {
 
 	result := []*Pet{}
-	// for loop of status
 	for _, item := range pets {
 		result = append(result, createPetDTO(&item))
-
 	}
 
 	return result

@@ -12,133 +12,150 @@ package petstore
 
 import (
 	"context"
-	"strconv"
+	"errors"
+	"fmt"
 
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
+// AddPet adds a new pet to the store.
 func (app *Application) AddPet(ctx context.Context, in *AddPetRequest) (*emptypb.Empty, error) {
-
 	out := new(emptypb.Empty)
-	// Define Pets model
-	petRequest := in.GetBody()
-	m := createPetEntity(petRequest)
+	app.infoLog.Printf("Endpoint Hit: AddPet")
+	m := createPetEntity(in.GetBody())
 
-	// Insert new Pets
-	pet, err := app.pets.Insert(*m)
+	id, err := app.pets.Insert(ctx, *m)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "AddPet error: %s", err)
 	}
-	//m.id = insertResult.InsertedID.(primitive.ObjectID)
-	app.infoLog.Printf("New pet have been created, id=%s", pet.ID)
+	app.infoLog.Printf("New pet created: %d", id)
 
 	return out, nil
-
 }
+
+// GetPetById retrieves a pet by its numerical ID.
 func (app *Application) GetPetById(ctx context.Context, in *GetPetByIdRequest) (*Pet, error) {
+	app.infoLog.Printf("Endpoint Hit: GetPetById %d", in.PetId)
 
-	// Get id from incoming url
-	id := strconv.FormatInt(in.PetId, 10)
-	app.infoLog.Printf("Get pet by id=%s \n", id)
-
-	// Find Pets by id
-	model, err := app.pets.FindByID(in.PetId)
+	model, err := app.pets.FindByID(ctx, in.PetId)
 	if err != nil {
-
-		app.infoLog.Println("Pets not found")
-		return nil, status.Errorf(codes.Internal, "Pets not found error: %s", err)
-
+		if errors.Is(err, ErrNotFound) {
+			app.infoLog.Println("Pet not found")
+			return nil, status.Errorf(codes.NotFound, "Pet not found")
+		}
+		app.serverError(err)
+		return nil, status.Errorf(codes.Internal, "GetPetById error: %s", err)
 	}
-	result := createPetDTO(model)
-	return result, nil
-
+	return createPetDTO(model), nil
 }
+
+// DeletePet deletes a pet from the store.
 func (app *Application) DeletePet(ctx context.Context, in *DeletePetRequest) (*emptypb.Empty, error) {
+	app.infoLog.Printf("Endpoint Hit: DeletePet %d", in.PetId)
 
-	out := new(emptypb.Empty)
-	// Define Pets model
-	id := strconv.FormatInt(in.PetId, 10)
-
-	// Delete Pets by id
-	err := app.pets.Delete(id)
+	count, err := app.pets.DeleteByID(ctx, in.PetId)
 	if err != nil {
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "DeletePet error: %s", err)
 	}
 
-	app.infoLog.Printf("Have been eliminated pet with id: %d ", in.PetId)
-	return out, nil
+	app.infoLog.Printf("Deleted %d pet(s)", count)
+	return &emptypb.Empty{}, nil
 }
 
+// FindPetsByStatus returns pets filtered by status.
 func (app *Application) FindPetsByStatus(ctx context.Context, in *FindPetsByStatusRequest) (*FindPetsByStatusResponse, error) {
+	app.infoLog.Printf("Endpoint Hit: FindPetsByStatus %s", in.Status)
 
-	reqStatus := in.Status
-	app.infoLog.Printf("Endpoint Hit: FindPetsByStatus %s \n", reqStatus)
-	var model []PetEntity
-
-	statusList := convertPetStatusList(reqStatus)
-
-	// Find Pets by id
-	model, err := app.pets.FindByStatus(statusList)
+	statusList := convertPetStatusList(in.Status)
+	model, err := app.pets.FindByStatus(ctx, statusList)
 	if err != nil {
-		if err.Error() == "ErrNoDocuments" {
-			app.infoLog.Println("Pets not found")
-			return nil, status.Errorf(codes.Internal, "Pets not found error: %s", err)
-		}
-		// Any other error will send an internal server error
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "FindPetsByStatus error: %s", err)
-
 	}
-	result := CreatePetListDTO(model)
 
-	return &FindPetsByStatusResponse{Items: result}, nil
+	return &FindPetsByStatusResponse{Items: CreatePetListDTO(model)}, nil
 }
 
+// FindPetsByTags returns pets filtered by tags.
 func (app *Application) FindPetsByTags(ctx context.Context, in *FindPetsByTagsRequest) (*FindPetsByTagsResponse, error) {
+	app.infoLog.Printf("Endpoint Hit: FindPetsByTags %s", in.Tags)
 
-	tags := in.Tags
-	app.infoLog.Printf("Endpoint Hit: FindPetsByStatus %s \n", tags)
-	var model []PetEntity
-
-	// Find Pets by id
-	model, err := app.pets.FindByTagsRedis("pets", tags)
+	model, err := app.pets.FindBytags(ctx, in.Tags)
 	if err != nil {
-		if err.Error() == "ErrNoDocuments" {
-			app.infoLog.Println("Pets not found")
-			return nil, status.Errorf(codes.Internal, "Pets not found error: %s", err)
-		}
-		// Any other error will send an internal server error
 		app.serverError(err)
 		return nil, status.Errorf(codes.Internal, "FindPetsByTags error: %s", err)
-
 	}
-	items := CreatePetListDTO(model)
-	return &FindPetsByTagsResponse{Items: items}, nil
+	return &FindPetsByTagsResponse{Items: CreatePetListDTO(model)}, nil
 }
 
+// UpdatePet updates an existing pet in the store.
 func (app *Application) UpdatePet(ctx context.Context, in *UpdatePetRequest) (*emptypb.Empty, error) {
+	app.infoLog.Printf("Endpoint Hit: UpdatePet %v", in.GetBody())
+	m := createPetEntity(in.GetBody())
 
-	out := new(emptypb.Empty)
-	// Define Pets model
-	// Define Pets model
-	petRequest := in.GetBody()
-	m := createPetEntity(petRequest)
-
-	// Insert new Pets
-	pet, err := app.pets.Update(*m)
+	count, err := app.pets.Update(ctx, *m)
 	if err != nil {
 		app.serverError(err)
+		return nil, status.Errorf(codes.Internal, "UpdatePet error: %s", err)
 	}
 
-	app.infoLog.Printf("New pet have been created, id=%s \n", pet.ID)
-	return out, nil
-
+	app.infoLog.Printf("Pet updated, modified: %d", count)
+	return &emptypb.Empty{}, nil
 }
 
-func (app *Application) UpdatePetWithForm(context.Context, *UpdatePetWithFormRequest) (*emptypb.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UpdatePetWithForm not implemented")
+// UpdatePetWithForm updates a pet's name and/or status using form data.
+func (app *Application) UpdatePetWithForm(ctx context.Context, in *UpdatePetWithFormRequest) (*emptypb.Empty, error) {
+	app.infoLog.Printf("Endpoint Hit: UpdatePetWithForm id=%d, name=%s, status=%s", in.PetId, in.Name, in.Status)
+
+	// Find Pet by id
+	petEntity, err := app.pets.FindByID(ctx, in.PetId)
+
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			app.infoLog.Printf("Pet not found: %d", in.PetId)
+			return nil, status.Errorf(codes.NotFound, "Pet not found: %d", in.PetId)
+		}
+		app.serverError(err)
+		return nil, status.Errorf(codes.Internal, "Error finding pet: %v", err)
+	}
+
+	// Update fields if provided
+	if in.Name != "" {
+		petEntity.Name = in.Name
+	}
+	if in.Status != "" {
+		petEntity.Status = in.Status
+	}
+
+	// Update in DB
+	_, err = app.pets.Update(ctx, *petEntity)
+	if err != nil {
+		app.serverError(err)
+		return nil, status.Errorf(codes.Internal, "Error updating pet: %v", err)
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
+// UploadFile uploads a file for a pet and returns an ApiResponse.
+func (app *Application) UploadFile(ctx context.Context, in *UploadFileRequest) (*ApiResponse, error) {
+	app.infoLog.Printf("Endpoint Hit: UploadFile %d %s", in.PetId, in.AdditionalMetadata)
+	// Validate input parameters
+	if in.PetId == 0 {
+		app.infoLog.Printf("UploadFile:: pet ID is presented")
+		if in.File == "" {
+			app.infoLog.Printf("UploadFile:: file data is missing")
+			return nil, status.Errorf(codes.InvalidArgument, "file data is missing")
+		}
+	}
+
+	return &ApiResponse{
+		Code:    200,
+		Type:    "unknown",
+		Message: fmt.Sprintf("File uploaded for pet %d with metadata %s", in.PetId, in.AdditionalMetadata)}, nil
+
 }

@@ -12,33 +12,63 @@ package petstore
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
-func (s *Application) DeleteOrder(context context.Context, in *DeleteOrderRequest) (*emptypb.Empty, error) {
-
-	fmt.Println("DeleteOrder:: create a new user")
-	return nil, status.Errorf(codes.Unimplemented, "method PlaceOrder not implemented")
+// DeleteOrder deletes an order by its numerical ID.
+func (s *Application) DeleteOrder(ctx context.Context, in *DeleteOrderRequest) (*emptypb.Empty, error) {
+	s.infoLog.Printf("Endpoint Hit: DeleteOrder %d", in.OrderId)
+	_, err := s.stores.DeleteByID(ctx, in.OrderId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to delete order: %v", err)
+	}
+	return &emptypb.Empty{}, nil
 }
 
-func (s *Application) GetInventory(context context.Context, in *emptypb.Empty) (*GetInventoryResponse, error) {
+// GetInventory returns pet inventories by status.
+func (s *Application) GetInventory(ctx context.Context, in *emptypb.Empty) (*GetInventoryResponse, error) {
+	s.infoLog.Printf("Endpoint Hit: GetInventory")
+	inventory, err := s.stores.GetInventory(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get inventory: %v", err)
+	}
 
-	fmt.Println("GetInventory:: get inventory")
-	return nil, status.Errorf(codes.Unimplemented, "method GetInventory not implemented")
+	items := []*MapInventory{}
+	for k, v := range inventory {
+		items = append(items, &MapInventory{Name: k, Value: int64(v)})
+	}
+	return &GetInventoryResponse{Items: items}, nil
 }
 
-func (s *Application) GetOrderById(context context.Context, in *GetOrderByIdRequest) (*Order, error) {
-
-	fmt.Println("GetOrderById:: get order by id")
-	return nil, status.Errorf(codes.Unimplemented, "method GetOrderById not implemented")
+// GetOrderById retrieves an order by its numerical ID.
+func (s *Application) GetOrderById(ctx context.Context, in *GetOrderByIdRequest) (*Order, error) {
+	s.infoLog.Printf("Endpoint Hit: GetOrderById %d", in.OrderId)
+	orderEntity, err := s.stores.FindByID(ctx, in.OrderId)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, status.Errorf(codes.NotFound, "order not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to get order: %v", err)
+	}
+	return createOrderDTO(orderEntity), nil
 }
 
-func (s *Application) PlaceOrder(context context.Context, in *PlaceOrderRequest) (*Order, error) {
+// PlaceOrder places a new order for a pet.
+func (s *Application) PlaceOrder(ctx context.Context, in *PlaceOrderRequest) (*Order, error) {
+	s.infoLog.Printf("Endpoint Hit: PlaceOrder %v", in.Body)
+	if in.Body == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "order body is required")
+	}
 
-	fmt.Println("PlaceOrder:: place a new order")
-	return nil, status.Errorf(codes.Unimplemented, "method PlaceOrder not implemented")
+	orderEntity := createOrderEntity(in.Body)
+	id, err := s.stores.Insert(ctx, *orderEntity)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to place order: %v", err)
+	}
+	orderEntity.Id = id
+	return createOrderDTO(orderEntity), nil
 }

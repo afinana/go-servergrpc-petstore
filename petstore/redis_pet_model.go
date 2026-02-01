@@ -4,185 +4,243 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/go-redis/redis/v8"
 )
 
-// PetModel represent a mgo database session with a pet data model
+// PetModel handles database operations for Pet entities using Redis
 type PetModel struct {
-	C *redis.Client
+	Rdb *redis.Client
 }
 
-// All method will be used to get all records from pets table
-func (m *PetModel) All() ([]PetEntity, error) {
-	// Define variables
-	ctx := context.TODO()
-	pets := []PetEntity{}
+// Returns all pets in the collection
+func (m *PetModel) All(ctx context.Context) ([]PetEntity, error) {
+	// Find all keys matching pet:* (excluding indexes)
+	// This is inefficient for large datasets, but matches the "All" semantics.
+	// A better approach would be to maintain a "all_pets" set.
+	// For now, let's use a set "pets:all" to store IDs.
 
-	// Find all item
-	iter := m.C.Scan(ctx, 0, "pets:*", 0).Iterator()
+	ids, err := m.Rdb.SMembers(ctx, "pets:all").Result()
+	if err != nil {
+		return nil, err
+	}
 
-	for iter.Next(ctx) {
-		// Find item by id
-		data, err := m.C.Get(ctx, iter.Val()).Result()
+	var pets []PetEntity
+	for _, id := range ids {
+		val, err := m.Rdb.Get(ctx, fmt.Sprintf("pet:%s", id)).Result()
 		if err != nil {
-			// Checks if the user was not found
+			if err == redis.Nil {
+				continue // Should not happen if data is consistent
+			}
 			return nil, err
 		}
+
 		var pet PetEntity
-		err = json.Unmarshal([]byte(data), &pet)
-		// Checks if the user was not found
-		if err != nil {
+		if err := json.Unmarshal([]byte(val), &pet); err != nil {
 			return nil, err
 		}
 		pets = append(pets, pet)
-	} // for
+	}
+
 	return pets, nil
 }
 
-func (m *PetModel) FindByID(id int64) (*PetEntity, error) {
-
-	// Find pet by id
-	return m.FindByRedisID(fmt.Sprintf("pet:%d", id))
-
-}
-
-// Insert will be used to insert a new pet registry
-func (m *PetModel) Insert(pet PetEntity) (*PetEntity, error) {
-	// Add pet
-	json, err := json.Marshal(pet)
+// Finds a pet by its numerical ID
+func (m *PetModel) FindByID(ctx context.Context, id int64) (*PetEntity, error) {
+	key := fmt.Sprintf("pet:%d", id)
+	val, err := m.Rdb.Get(ctx, key).Result()
 	if err != nil {
-		// Checks if the pet was not found
-		return nil, err
-	}
-
-	ctx := context.Background()
-	// Add pet with id
-	err = m.C.Set(ctx, fmt.Sprintf("pet:%v", pet.Id), json, 0).Err()
-	if err != nil {
-		// Checks if the pet was not found
-		return nil, err
-	}
-
-	// Add status to hset with id
-	status_tag := fmt.Sprintf("pet_status:%v", pet.Status)
-	pet_key := fmt.Sprintf("pet:%v", pet.Id)
-
-	_, err = m.C.HSet(ctx, status_tag, pet_key, pet.Status).Result()
-	if err != nil {
-		// Checks if the hset was not found
-		return nil, err
-	}
-
-	// Add tags to hset with id
-	tags := pet.Tags
-	for _, tag := range tags {
-		_, err = m.C.HSet(ctx, fmt.Sprintf("pet_tags:%v", tag.Name), pet_key, tag.Name).Result()
-		if err != nil {
-			// Checks if the hset was not found
-			return nil, err
+		if err == redis.Nil {
+			return nil, ErrNotFound
 		}
+		return nil, err
+	}
+
+	var pet PetEntity
+	if err := json.Unmarshal([]byte(val), &pet); err != nil {
+		return nil, err
 	}
 
 	return &pet, nil
 }
 
-// Insert will be used to insert a new pet registry
-func (m *PetModel) Update(pet PetEntity) (*PetEntity, error) {
-	log.Printf("Update::FindByID of id:%d \n", pet.Id)
+// Inserts a new pet into the collection
+// Returns the inserted ID (int64)
+func (m *PetModel) Insert(ctx context.Context, pet PetEntity) (int64, error) {
+	// Generate ID if not provided (or even if provided, strictly speaking should be unique)
+	// For simplicity, let's generate a new ID if it's 0.
+	var id int64
+	if pet.Id == 0 {
+		var err error
+		id, err = m.Rdb.Incr(ctx, "pet:id").Result()
+		if err != nil {
+			return 0, err
+		}
+		pet.Id = id
+	} else {
+		id = pet.Id
+	}
+	// Also keys
+	key := fmt.Sprintf("pet:%d", id)
 
-	// Clean pet register
-	m.DeleteByRedisID(fmt.Sprintf("%v", pet.Id))
+	data, err := json.Marshal(pet)
+	if err != nil {
+		return 0, err
+	}
 
-	return m.Insert(pet)
+	// Transaction to save pet and update indexes
+	pipe := m.Rdb.TxPipeline()
+	pipe.Set(ctx, key, data, 0)
+	pipe.SAdd(ctx, "pets:all", id)
+	if pet.Status != "" {
+		pipe.SAdd(ctx, fmt.Sprintf("pet:status:%s", pet.Status), id)
+	}
+	for _, tag := range pet.Tags {
+		pipe.SAdd(ctx, fmt.Sprintf("pet:tag:%s", tag.Name), id)
+	}
+
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
 }
 
-// Delete will be used to delete a pet registry
-func (m *PetModel) Delete(id string) error {
-	ctx := context.Background()
-	// Delete pet by id
-	err := m.C.Del(ctx, fmt.Sprintf("pet:%v", id)).Err()
-	return err
+// Updates an existing pet's data
+func (m *PetModel) Update(ctx context.Context, pet PetEntity) (int64, error) {
+	// Check if exists first to handle "Not Found" correctly if needed,
+	// or just overwrite. API usually expects 404 if not found.
+	key := fmt.Sprintf("pet:%d", pet.Id)
+
+	// Get old pet to remove from old indexes if status/tags changed
+	oldVal, err := m.Rdb.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return 0, fmt.Errorf("pet not found")
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	var oldPet PetEntity
+	json.Unmarshal([]byte(oldVal), &oldPet) // Ignore error, best effort
+
+	data, err := json.Marshal(pet)
+	if err != nil {
+		return 0, err
+	}
+
+	pipe := m.Rdb.TxPipeline()
+	pipe.Set(ctx, key, data, 0)
+
+	// Mange indexes
+	if oldPet.Status != pet.Status {
+		if oldPet.Status != "" {
+			pipe.SRem(ctx, fmt.Sprintf("pet:status:%s", oldPet.Status), pet.Id)
+		}
+		if pet.Status != "" {
+			pipe.SAdd(ctx, fmt.Sprintf("pet:status:%s", pet.Status), pet.Id)
+		}
+	}
+
+	// Tags - inefficient to check diff, just remove all old and add all new?
+	// Or just add new. SRem old ones.
+	for _, tag := range oldPet.Tags {
+		pipe.SRem(ctx, fmt.Sprintf("pet:tag:%s", tag.Name), pet.Id)
+	}
+	for _, tag := range pet.Tags {
+		pipe.SAdd(ctx, fmt.Sprintf("pet:tag:%s", tag.Name), pet.Id)
+	}
+
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return 1, nil // Modified count
 }
 
-// FindByStatus will be used to find a pet registry by status
-func (m *PetModel) FindByStatus(status []string) ([]PetEntity, error) {
+// Deletes a pet by its numerical ID
+func (m *PetModel) DeleteByID(ctx context.Context, id int64) (int64, error) {
+	key := fmt.Sprintf("pet:%d", id)
 
-	return m.FindByTagsRedis("pet_status:", status)
+	// Get pet to remove from indexes
+	val, err := m.Rdb.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return 0, nil // Nothing to delete
+	}
+	if err != nil {
+		return 0, err
+	}
+
+	var pet PetEntity
+	json.Unmarshal([]byte(val), &pet)
+
+	pipe := m.Rdb.TxPipeline()
+	pipe.Del(ctx, key)
+	pipe.SRem(ctx, "pets:all", id)
+	if pet.Status != "" {
+		pipe.SRem(ctx, fmt.Sprintf("pet:status:%s", pet.Status), id)
+	}
+	for _, tag := range pet.Tags {
+		pipe.SRem(ctx, fmt.Sprintf("pet:tag:%s", tag.Name), id)
+	}
+
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return 1, nil
 }
 
-// FindByTagsRedis will be used to find a pet registry by a list of statuses or tags
-func (m *PetModel) FindByTagsRedis(prefix string, tags []string) ([]PetEntity, error) {
+// Finds pets by a list of statuses
+func (m *PetModel) FindByStatus(ctx context.Context, status []string) ([]PetEntity, error) {
+	// Union of sets
+	var keys []string
+	for _, s := range status {
+		keys = append(keys, fmt.Sprintf("pet:status:%s", s))
+	}
 
-	// begin find
-	ctx := context.Background()
+	ids, err := m.Rdb.SUnion(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	return m.fetchPetsByIDs(ctx, ids)
+}
+
+// Finds pets by a list of tags
+func (m *PetModel) FindBytags(ctx context.Context, tags []string) ([]PetEntity, error) {
+	var keys []string
+	for _, t := range tags {
+		keys = append(keys, fmt.Sprintf("pet:tag:%s", t))
+	}
+
+	// Spec says "Tags to filter by". Usually OR? Swagger implies OR usually for this endpoint.
+	ids, err := m.Rdb.SUnion(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	return m.fetchPetsByIDs(ctx, ids)
+}
+
+func (m *PetModel) fetchPetsByIDs(ctx context.Context, ids []string) ([]PetEntity, error) {
 	var pets []PetEntity
-	for _, tag := range tags {
-
-		key := fmt.Sprintf("%v%v", prefix, tag)
-
-		log.Printf("FindByTagsRedis::HGet of keys=%s \n", key)
-		// Get all ids of the given tag
-		ids, err := m.C.HKeys(ctx, key).Result()
+	for _, idStr := range ids {
+		// idStr from redis set is string
+		val, err := m.Rdb.Get(ctx, fmt.Sprintf("pet:%s", idStr)).Result()
 		if err != nil {
-			// Checks if the pet was not found
-			return nil, err
+			continue
 		}
-		for _, id := range ids {
-			log.Printf("FindByTagsRedis::FindByID of id=%s \n", id)
-			pet, err := m.FindByRedisID(id)
-			if err != nil {
-				// Checks if the pet was not found
-				break
-			}
-			pets = append(pets, *pet)
-
+		var pet PetEntity
+		if err := json.Unmarshal([]byte(val), &pet); err == nil {
+			pets = append(pets, pet)
 		}
-
 	}
 	return pets, nil
 }
 
-// FindByID will be used to find a pet registry by id
-func (m *PetModel) FindByRedisID(id string) (*PetEntity, error) {
-
-	ctx := context.Background()
-
-	// Find pet by id
-	data, err := m.C.Get(ctx, id).Result()
-	if err != nil {
-		// Checks if the pet was not found
-		return nil, err
-	}
-
-	pet := PetEntity{}
-	err = json.Unmarshal([]byte(data), &pet)
-	if err != nil {
-		panic(err)
-	}
-	return &pet, nil
-}
-
-// FindByID will be used to find a pet registry by id
-func (m *PetModel) DeleteByRedisID(id string) error {
-
-	ctx := context.Background()
-
-	pet, err := m.FindByRedisID(id)
-	if err == nil {
-
-		// Clean old pet registry
-		status_tag := fmt.Sprintf("pet_status:%v", pet.Status)
-		pet_key := fmt.Sprintf("pet:%v", pet.Id)
-		_ = m.C.Del(ctx, pet_key)
-		_ = m.C.HDel(ctx, status_tag, pet_key)
-		for _, tag := range pet.Tags {
-			tag_key := fmt.Sprintf("%v%v", "pet_tags:", tag)
-			_ = m.C.HDel(ctx, tag_key, pet_key)
-
-		}
-
-	}
-	return err
-}
+// Deletes a pet by its MongoDB ObjectID - DEPRECATED/UNUSED in Redis version, but kept if interface requires it?
+// Actually, I'll remove it as I'm decoupling from Mongo.

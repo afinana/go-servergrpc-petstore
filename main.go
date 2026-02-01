@@ -18,7 +18,7 @@ import (
 	"net"
 	"os"
 
-	"github.com/redis/go-redis/v9"
+	"github.com/go-redis/redis/v8"
 	"google.golang.org/grpc"
 	api "middleland.net/swaggerapi/petstore"
 )
@@ -28,39 +28,48 @@ func main() {
 	// Define command-line flags
 	serverAddr := flag.String("serverAddr", "localhost", "HTTP server network address")
 	serverPort := flag.Int("serverPort", 8090, "HTTP server network port")
-	redisURI := flag.String("redisURI", "redis://:@localhost:6379/", "Database hostname url")
 
+	redisAddr := flag.String("redisAddr", "localhost:6379", "Redis address")
+	redisPassword := flag.String("redisPassword", "", "Redis password")
+	redisDB := flag.Int("redisDB", 0, "Redis DB")
 	flag.Parse()
 
 	// Create logger for writing information and error messages.
-	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
-	errLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+	infoLog := log.New(&api.ColoredWriter{W: os.Stdout, Color: api.ColorGreen}, "INFO\t", log.Ldate|log.Ltime)
+	errLog := log.New(&api.ColoredWriter{W: os.Stderr, Color: api.ColorRed}, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
-	// Establish database connection
-	opt, err := redis.ParseURL(*redisURI)
+	// Create Redis client
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     *redisAddr,
+		Password: *redisPassword,
+		DB:       *redisDB,
+	})
+
+	// Establish database connection (ping)
+	ctx := context.Background() // global context
+	_, err := rdb.Ping(ctx).Result()
 	if err != nil {
 		errLog.Fatal(err)
 	}
-	client := redis.NewClient(opt)
 
-	ctx := context.Background()
-	_, err = client.Ping(ctx).Result()
-	if err != nil {
-		errLog.Fatal(err)
-	}
+	defer func() {
+		if err := rdb.Close(); err != nil {
+			errLog.Printf("Error closing redis: %v", err)
+		}
+	}()
+
 	infoLog.Printf("Database connection established")
-
 	app := api.NewLog(
 		infoLog,
 		errLog,
 		&api.PetModel{
-			C: client,
+			Rdb: rdb,
 		},
 		&api.StoreModel{
-			C: client,
+			Rdb: rdb,
 		},
 		&api.UserModel{
-			C: client,
+			Rdb: rdb,
 		},
 	)
 

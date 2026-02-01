@@ -1,0 +1,16 @@
+.git
+.github
+.vscode
+bin
+tmp
+release
+dist
+vendor
+.DS_Store
+*.md
+*.example
+Dockerfile
+docker-compose.yml
+LICENSE
+go-servergrpc-petstore.code-workspace
+__debug_bin*

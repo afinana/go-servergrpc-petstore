@@ -1,64 +1,85 @@
-# Go API Server GRPC- REDIS db version for swagger (1.0.1)
+# Go gRPC Petstore Server (MongoDB)
 
-This is a sample microservice of Petstore application.  You can find out more about Swagger at [http://swagger.io](http://swagger.io) or on [irc.freenode.net, #swagger](http://swagger.io/irc/).  For this sample, you can use the api key `special-key` to test the authorization filters.
+This is a sample microservice for the Petstore application using Go, gRPC, and MongoDB. It demonstrates a basic implementation of the Petstore API using Protocol Buffers and gRPC.
 
-## Overview
-This server was generated partially by the [swagger-codegen]
-(https://github.com/swagger-api/swagger-codegen) project.  
-By using the [OpenAPI-Spec](https://github.com/OAI/OpenAPI-Specification) from a remote server, you can easily generate a server stub.  
--
+## Prerequisites
 
-To see how to make this your own, look here:
+- **Go**: 1.25.5 or later
+- **Docker**: For running MongoDB
+- **MongoDB**: (Optional if not using Docker)
 
-[README](https://github.com/swagger-api/swagger-codegen/blob/master/README.md)
+## Getting Started
 
-- API version: 1.0.6
-- Build date: 2023-06-15T23:27:07.696Z
+### 1. Start MongoDB
 
+The application requires a MongoDB instance. You can start one easily using Docker:
 
-## Running the server
-To run the server, follow these simple steps:
-
+```bash
+docker run -d -p 27017:27017 --name test-mongo mongo:latest
 ```
+
+### 2. Run the Server
+
+To start the gRPC server (listening on port `8090`):
+
+```bash
 go run main.go
 ```
-## Running with Docker
 
-``` sh
-docker -t go-petstore build .
-docker run --name go-petstore  -p 8090:8080  go-server-petstore
+You should see output similar to:
+```
+INFO    2026/01/26 22:00:00 Database connection established
+INFO    2026/01/26 22:00:00 Starting server on localhost:8090
+2026/01/26 22:00:00 server listening at [::]:8090
 ```
 
-##  How to convert Openapi specification (json file format) to protobuf by `openapi2proto`.
+### 3. Run Tests
 
-### Download openapi2proto and execute the following command:
+Integration tests are located in the `petstore` package and require the MongoDB container to be running.
 
-```console
-openapi2proto -spec swagger.json > petstore.pb
+```bash
+go test -v ./petstore/...
 ```
 
-### From protobuffer to go code
+**Note:** The tests will clear the `pets` collection in the `petstore_test` database.
 
-1. Add this option to petstore.pb file.
+## Project Structure
 
-```
-option go_package = "./";
-```
+- **`main.go`**: Entry point for the server. Handles database connection and gRPC server initialization.
+- **`petstore/`**: Contains the generated protobuf code, API implementation, and models.
+    - **`petstore.pb.go`**: Generated protobuf code.
+    - **`petstore_grpc.pb.go`**: Generated gRPC service code.
+    - **`api_*.go`**: Implementation of the gRPC service methods.
+    - **`mongo_*_model.go`**: MongoDB data access layer.
+    - **`*test.go`**: Integration tests.
+- **`proto/`**: Contains the `petstore.pb` (protobuf definition).
 
-2. Execute the following command:
+## API Implementation Status
 
-```console
-protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative petstore.pb
-```
+| Service | Status | Notes |
+| :--- | :--- | :--- |
+| **Pet** | ✅ Partial | `AddPet`, `GetPetById`, `FindPetsByStatus`, `DeletePet` implemented. |
+| **Store** | ⚠️ Pending | Returns `Unimplemented` error. |
+| **User** | ⚠️ Pending | Returns `Unimplemented` error. |
 
-3. Convertion Issues:
+## Development
 
-- File type was not recognized and has been changed to string (base64).
-- schema:string is not recognized on Login operation and has been changed to ApiResponse.
+### Regenerating Protobuf Code
 
+If you modify `petstore.pb`, you can regenerate the Go code:
 
-## Running REDIS with Docker
+1.  Install `protoc` and the Go plugins:
+    ```bash
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+    ```
+2.  Run `protoc`:
+    ```bash
+    protoc --go_out=. --go_opt=paths=source_relative \
+        --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+        petstore/petstore.pb
+    ```
 
-``` sh
-docker run --name redis-stack -d -p 6379:6379 -p 8001:8001 redis/redis-stack:latest
-```
+## License
+
+This project is generated from the [Swagger Petstore](http://petstore.swagger.io) API definition.

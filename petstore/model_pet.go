@@ -10,17 +10,12 @@
 
 package petstore
 
-import (
-	"go.mongodb.org/mongo-driver/bson/primitive"
-)
-
 type PetEntity struct {
-	ID        primitive.ObjectID `json:"ID" bson:"_id,omitempty"`
-	Id        int64              `json:"id,omitempty"`
-	Category  *CategoryEntity    `json:"category,omitempty"`
-	Name      string             `json:"name"`
-	PhotoUrls []string           `json:"photoUrls"`
-	Tags      []TagEntity        `json:"tags,omitempty"`
+	Id        int64           `json:"id,omitempty"`
+	Category  *CategoryEntity `json:"category,omitempty"`
+	Name      string          `json:"name"`
+	PhotoUrls []string        `json:"photoUrls"`
+	Tags      []TagEntity     `json:"tags,omitempty"`
 	// pet status in the store
 	Status string `json:"status,omitempty"`
 }
