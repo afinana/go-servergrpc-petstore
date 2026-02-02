@@ -21,6 +21,7 @@ import (
 
 // DeleteOrder deletes an order by its numerical ID.
 func (s *Application) DeleteOrder(ctx context.Context, in *DeleteOrderRequest) (*emptypb.Empty, error) {
+
 	s.infoLog.Printf("Endpoint Hit: DeleteOrder %d", in.OrderId)
 	_, err := s.stores.DeleteByID(ctx, in.OrderId)
 	if err != nil {
@@ -31,6 +32,7 @@ func (s *Application) DeleteOrder(ctx context.Context, in *DeleteOrderRequest) (
 
 // GetInventory returns pet inventories by status.
 func (s *Application) GetInventory(ctx context.Context, in *emptypb.Empty) (*GetInventoryResponse, error) {
+
 	s.infoLog.Printf("Endpoint Hit: GetInventory")
 	inventory, err := s.stores.GetInventory(ctx)
 	if err != nil {
@@ -46,6 +48,7 @@ func (s *Application) GetInventory(ctx context.Context, in *emptypb.Empty) (*Get
 
 // GetOrderById retrieves an order by its numerical ID.
 func (s *Application) GetOrderById(ctx context.Context, in *GetOrderByIdRequest) (*Order, error) {
+
 	s.infoLog.Printf("Endpoint Hit: GetOrderById %d", in.OrderId)
 	orderEntity, err := s.stores.FindByID(ctx, in.OrderId)
 	if err != nil {
@@ -59,6 +62,7 @@ func (s *Application) GetOrderById(ctx context.Context, in *GetOrderByIdRequest)
 
 // PlaceOrder places a new order for a pet.
 func (s *Application) PlaceOrder(ctx context.Context, in *PlaceOrderRequest) (*Order, error) {
+
 	s.infoLog.Printf("Endpoint Hit: PlaceOrder %v", in.Body)
 	if in.Body == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "order body is required")
