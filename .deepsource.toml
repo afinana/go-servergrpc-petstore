@@ -1,0 +1,10 @@
+version = 1
+
+[[analyzers]]
+name = "go"
+
+  [analyzers.meta]
+  import_root = "github.com/afinana/go-servergrpc-petstore"
+
+[[code_formatters]]
+name = "gofmt"
