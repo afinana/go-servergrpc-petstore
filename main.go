@@ -13,7 +13,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -26,8 +25,7 @@ import (
 func main() {
 
 	// Define command-line flags
-	serverAddr := flag.String("serverAddr", "localhost", "HTTP server network address")
-	serverPort := flag.Int("serverPort", 8090, "HTTP server network port")
+	serverAddr := flag.String("serverAddr", "localhost:8090", "HTTP server network address")
 
 	redisAddr := flag.String("redisAddr", "localhost:6379", "Redis address")
 	redisPassword := flag.String("redisPassword", "", "Redis password")
@@ -74,11 +72,10 @@ func main() {
 	)
 
 	// Initialize a new http.Server struct.
-	serverURI := fmt.Sprintf("%s:%d", *serverAddr, *serverPort)
-	infoLog.Printf("Starting server on %s", serverURI)
+	infoLog.Printf("Starting server on %s", *serverAddr)
 
 	// Start listening in serverPort
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *serverPort))
+	lis, err := net.Listen("tcp", *serverAddr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
