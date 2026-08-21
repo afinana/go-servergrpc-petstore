@@ -5,7 +5,6 @@ bin
 tmp
 release
 dist
-vendor
 .DS_Store
 *.md
 *.example

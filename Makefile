@@ -34,8 +34,13 @@ tidy:
 	go mod tidy
 	go mod verify
 
+## vendor: Download dependencies into vendor folder for offline/container builds
+vendor:
+	@echo "==> Vendoring Go modules..."
+	go mod vendor
+
 ## docker-build: Build the Docker image
-docker-build:
+docker-build: vendor
 	@echo "==> Building Docker image $(DOCKER_IMAGE)..."
 	docker build -t $(DOCKER_IMAGE):latest .
 
@@ -45,7 +50,7 @@ docker-run:
 	docker run --rm -p 8090:8090 --name $(BINARY_NAME) $(DOCKER_IMAGE):latest
 
 ## compose-up: Start MongoDB and gRPC server using docker compose
-compose-up:
+compose-up: vendor
 	@echo "==> Starting services with Docker Compose..."
 	docker compose up -d
 
@@ -57,7 +62,7 @@ compose-down:
 ## clean: Remove build artifacts and temporary files
 clean:
 	@echo "==> Cleaning build artifacts..."
-	rm -rf bin/ coverage.out coverage.html swaggerapi
+	rm -rf bin/ coverage.out coverage.html swaggerapi vendor/
 
 ## help: Display this help message
 help:

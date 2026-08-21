@@ -1,21 +1,18 @@
 # syntax=docker/dockerfile:1
 
 ## Build
-FROM golang:1.25.5-bookworm AS build
+FROM golang:1.25-bookworm AS build
 
 WORKDIR /app
 
-# Download Go modules
-# Copy go.mod and go.sum files first to leverage Docker cache
-COPY go.mod go.sum ./
-RUN go mod download
+ENV CGO_ENABLED=0
+ENV GOOS=linux
 
-# Copy the source code
-COPY petstore ./petstore
-COPY main.go .
+# Copy repository source code including vendored dependencies
+COPY . .
 
-# Build statically linked binary with size optimizations
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /petstore-server
+# Build statically linked binary offline using vendor
+RUN go build -mod=vendor -ldflags="-w -s" -o /petstore-server main.go
 
 ## Deploy
 # Use static-debian12 for a smaller, secure base image
