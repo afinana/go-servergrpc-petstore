@@ -31,7 +31,7 @@ WORKDIR /
 
 COPY --from=build /petstore-server /petstore-server
 
-EXPOSE 8080
+EXPOSE 8090
 
 USER nonroot:nonroot
 

@@ -5,6 +5,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // StoreModel handles database operations for Order entities
@@ -57,4 +58,16 @@ func (m *StoreModel) GetInventory(ctx context.Context, petCollection *mongo.Coll
 	}
 
 	return inventory, nil
+}
+
+// EnsureIndexes creates necessary indexes for the stores collection
+func (m *StoreModel) EnsureIndexes(ctx context.Context) error {
+	models := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "id", Value: 1}},
+			Options: options.Index().SetUnique(true).SetSparse(true),
+		},
+	}
+	_, err := m.C.Indexes().CreateMany(ctx, models)
+	return err
 }

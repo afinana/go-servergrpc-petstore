@@ -33,7 +33,7 @@ func (s *Application) DeleteOrder(ctx context.Context, in *DeleteOrderRequest) (
 // GetInventory returns pet inventories by status.
 func (s *Application) GetInventory(ctx context.Context, in *emptypb.Empty) (*GetInventoryResponse, error) {
 	s.infoLog.Printf("Endpoint Hit: GetInventory")
-	inventory, err := s.stores.GetInventory(ctx, s.pets.C)
+	inventory, err := s.stores.GetInventory(ctx, s.pets.GetCollection())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get inventory: %v", err)
 	}

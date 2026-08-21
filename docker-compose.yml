@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: petstore-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: petstore
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  petstore-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: petstore-grpc-server
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      SERVER_ADDR: ":8090"
+      MONGO_URI: "mongodb://mongodb:27017"
+      MONGO_DATABASE: "petstore"
+      ENABLE_CREDENTIALS: "false"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  mongo_data:

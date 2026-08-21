@@ -11,6 +11,7 @@ import (
 )
 
 func TestStoreLifecycle(t *testing.T) {
+	skipIfNoMongo(t)
 	ctx := context.Background()
 	orderID := int64(1001)
 	shipDate := time.Now().Truncate(time.Second)
@@ -91,4 +92,32 @@ func TestStoreLifecycle(t *testing.T) {
 			t.Errorf("Expected NotFound error, got %v", err)
 		}
 	})
+}
+
+func TestPlaceOrder_NilBody(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	req := &PlaceOrderRequest{Body: nil}
+	_, err := testApp.PlaceOrder(ctx, req)
+	if err == nil {
+		t.Fatalf("Expected error for nil body, got nil")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Errorf("Expected InvalidArgument code, got %v", status.Code(err))
+	}
+}
+
+func TestGetOrderById_NotFound(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	req := &GetOrderByIdRequest{OrderId: 888888}
+	_, err := testApp.GetOrderById(ctx, req)
+	if err == nil {
+		t.Fatalf("Expected error for nonexistent order, got nil")
+	}
+	if status.Code(err) != codes.NotFound {
+		t.Errorf("Expected NotFound code, got %v", status.Code(err))
+	}
 }

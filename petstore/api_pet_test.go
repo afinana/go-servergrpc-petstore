@@ -5,20 +5,22 @@ import (
 	"testing"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestAddPetAndGetPetById(t *testing.T) {
+	skipIfNoMongo(t)
 	ctx := context.Background()
 
 	// Clean up before test
-	_, err := testApp.pets.C.DeleteMany(ctx, bson.M{})
+	_, err := testApp.pets.GetCollection().DeleteMany(ctx, bson.M{})
 	if err != nil {
 		t.Fatalf("Failed to clean up pets collection: %v", err)
 	}
 
 	// 1. Add Pet
 	petID := int64(1001)
-
 	petName := "Fluffy"
 	pet := &Pet{
 		Id:        petID,
@@ -26,6 +28,7 @@ func TestAddPetAndGetPetById(t *testing.T) {
 		Status:    Pet_STATUS_AVAILABLE,
 		PhotoUrls: []string{"url1", "url2"},
 		Tags:      []*Tag{{Id: 1, Name: "cute"}},
+		Category:  &Category{Id: 1, Name: "Dogs"},
 	}
 	addReq := &AddPetRequest{
 		Body: pet,
@@ -51,18 +54,38 @@ func TestAddPetAndGetPetById(t *testing.T) {
 	if retrievedPet.Name != petName {
 		t.Errorf("Expected pet name %s, got %s", petName, retrievedPet.Name)
 	}
+	if retrievedPet.Category == nil || retrievedPet.Category.Name != "Dogs" {
+		t.Errorf("Expected Category 'Dogs', got %+v", retrievedPet.Category)
+	}
+}
+
+func TestGetPetById_NotFound(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	getReq := &GetPetByIdRequest{
+		PetId: 999999,
+	}
+	_, err := testApp.GetPetById(ctx, getReq)
+	if err == nil {
+		t.Fatalf("Expected error for nonexistent pet, got nil")
+	}
+	if status.Code(err) != codes.NotFound {
+		t.Errorf("Expected NotFound status code, got %v", status.Code(err))
+	}
 }
 
 func TestFindPetsByStatus(t *testing.T) {
+	skipIfNoMongo(t)
 	ctx := context.Background()
 
 	// Clean up before test
-	_, err := testApp.pets.C.DeleteMany(ctx, bson.M{})
+	_, err := testApp.pets.GetCollection().DeleteMany(ctx, bson.M{})
 	if err != nil {
 		t.Fatalf("Failed to clean up pets collection: %v", err)
 	}
 
-	// Add a few pets with different statuses
+	// Add pets with different statuses
 	pets := []*Pet{
 		{Id: 2001, Name: "P1", Status: Pet_STATUS_AVAILABLE},
 		{Id: 2002, Name: "P2", Status: Pet_STATUS_PENDING},
@@ -94,17 +117,94 @@ func TestFindPetsByStatus(t *testing.T) {
 	}
 }
 
-func TestDeletePet(t *testing.T) {
+func TestFindPetsByTags(t *testing.T) {
+	skipIfNoMongo(t)
 	ctx := context.Background()
 
 	// Clean up before test
-	_, err := testApp.pets.C.DeleteMany(ctx, bson.M{})
+	_, err := testApp.pets.GetCollection().DeleteMany(ctx, bson.M{})
+	if err != nil {
+		t.Fatalf("Failed to clean up pets collection: %v", err)
+	}
+
+	// Add pets with tags
+	pets := []*Pet{
+		{Id: 3001, Name: "TaggedPet1", Tags: []*Tag{{Id: 1, Name: "energetic"}}},
+		{Id: 3002, Name: "TaggedPet2", Tags: []*Tag{{Id: 2, Name: "calm"}}},
+	}
+
+	for _, p := range pets {
+		_, err := testApp.AddPet(ctx, &AddPetRequest{Body: p})
+		if err != nil {
+			t.Fatalf("Failed to add pet %s: %v", p.Name, err)
+		}
+	}
+
+	// Find by tag
+	req := &FindPetsByTagsRequest{Tags: []string{"energetic"}}
+	res, err := testApp.FindPetsByTags(ctx, req)
+	if err != nil {
+		t.Fatalf("FindPetsByTags failed: %v", err)
+	}
+
+	if len(res.Items) != 1 {
+		t.Fatalf("Expected 1 pet with tag energetic, got %d", len(res.Items))
+	}
+	if res.Items[0].Name != "TaggedPet1" {
+		t.Errorf("Expected pet 'TaggedPet1', got '%s'", res.Items[0].Name)
+	}
+}
+
+func TestUpdatePet(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	// Clean up
+	_, err := testApp.pets.GetCollection().DeleteMany(ctx, bson.M{})
+	if err != nil {
+		t.Fatalf("Failed to clean up pets collection: %v", err)
+	}
+
+	// Add pet
+	petID := int64(4001)
+	pet := &Pet{Id: petID, Name: "Original", Status: Pet_STATUS_AVAILABLE}
+	_, err = testApp.AddPet(ctx, &AddPetRequest{Body: pet})
+	if err != nil {
+		t.Fatalf("AddPet failed: %v", err)
+	}
+
+	// Update pet
+	updated := &Pet{Id: petID, Name: "UpdatedName", Status: Pet_STATUS_SOLD}
+	_, err = testApp.UpdatePet(ctx, &UpdatePetRequest{Body: updated})
+	if err != nil {
+		t.Fatalf("UpdatePet failed: %v", err)
+	}
+
+	// Verify
+	retrieved, err := testApp.GetPetById(ctx, &GetPetByIdRequest{PetId: petID})
+	if err != nil {
+		t.Fatalf("GetPetById failed: %v", err)
+	}
+	if retrieved.Name != "UpdatedName" {
+		t.Errorf("Expected name 'UpdatedName', got '%s'", retrieved.Name)
+	}
+	if retrieved.Status != Pet_STATUS_SOLD {
+		t.Errorf("Expected status SOLD, got %v", retrieved.Status)
+	}
+}
+
+func TestDeletePet(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	// Clean up before test
+	_, err := testApp.pets.GetCollection().DeleteMany(ctx, bson.M{})
 	if err != nil {
 		t.Fatalf("Failed to clean up pets collection: %v", err)
 	}
 
 	// Add a pet
-	petID := int64(3001)
+	petID := int64(5001)
 	pet := &Pet{
 		Id:   petID,
 		Name: "ToDelete",
@@ -127,8 +227,6 @@ func TestDeletePet(t *testing.T) {
 	getReq := &GetPetByIdRequest{
 		PetId: petID,
 	}
-	// We might expect an error or nil here depending on implementation details
-	// Looking at api_pet.go, it logs "Pets not found" and returns error if mongo.ErrNoDocuments
 	_, err = testApp.GetPetById(ctx, getReq)
 	if err == nil {
 		t.Errorf("Expected error when getting deleted pet, got nil")
@@ -136,16 +234,17 @@ func TestDeletePet(t *testing.T) {
 }
 
 func TestUpdatePetWithForm(t *testing.T) {
+	skipIfNoMongo(t)
 	ctx := context.Background()
 
 	// Clean up before test
-	_, err := testApp.pets.C.DeleteMany(ctx, bson.M{})
+	_, err := testApp.pets.GetCollection().DeleteMany(ctx, bson.M{})
 	if err != nil {
 		t.Fatalf("Failed to clean up pets collection: %v", err)
 	}
 
 	// 1. Add Pet
-	petID := int64(4001)
+	petID := int64(6001)
 	petName := "OriginalName"
 	pet := &Pet{
 		Id:     petID,
@@ -158,8 +257,8 @@ func TestUpdatePetWithForm(t *testing.T) {
 	}
 
 	// 2. Update Pet With Form
-	updatedName := "UpdatedName"
-	updatedStatus := "STATUS_SOLD" // string status as per proto definition for UpdatePetWithForm
+	updatedName := "UpdatedFormName"
+	updatedStatus := "STATUS_SOLD"
 
 	req := &UpdatePetWithFormRequest{
 		PetId:  petID,
@@ -173,10 +272,7 @@ func TestUpdatePetWithForm(t *testing.T) {
 	}
 
 	// 3. Verify Update
-	getReq := &GetPetByIdRequest{
-		PetId: petID,
-	}
-	retrievedPet, err := testApp.GetPetById(ctx, getReq)
+	retrievedPet, err := testApp.GetPetById(ctx, &GetPetByIdRequest{PetId: petID})
 	if err != nil {
 		t.Fatalf("GetPetById failed: %v", err)
 	}
@@ -184,13 +280,27 @@ func TestUpdatePetWithForm(t *testing.T) {
 	if retrievedPet.Name != updatedName {
 		t.Errorf("Expected updated name %s, got %s", updatedName, retrievedPet.Name)
 	}
-
-	// API GetPetById returns Pet struct which has Status enum.
-	// Our UpdatePetWithForm updates the DB with the string "sold".
-	// The retrieval maps DB string to enum.
-	// "sold" maps to Pet_PET_STATUS_SOLD (confirmed in pet_mapper.go usually)
-	// Let's verify if the status enum matches.
 	if retrievedPet.Status != Pet_STATUS_SOLD {
 		t.Errorf("Expected status SOLD, got %v", retrievedPet.Status)
 	}
+}
+
+func TestUploadFile(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	t.Run("ValidUpload", func(t *testing.T) {
+		req := &UploadFileRequest{
+			PetId:              1001,
+			AdditionalMetadata: "avatar image",
+			File:               "binary_data_placeholder",
+		}
+		resp, err := testApp.UploadFile(ctx, req)
+		if err != nil {
+			t.Fatalf("UploadFile failed: %v", err)
+		}
+		if resp.Code != 200 {
+			t.Errorf("Expected code 200, got %d", resp.Code)
+		}
+	})
 }

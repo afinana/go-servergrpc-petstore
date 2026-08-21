@@ -6,11 +6,17 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // PetModel handles database operations for Pet entities
 type PetModel struct {
 	C *mongo.Collection
+}
+
+// GetCollection returns the underlying MongoDB collection
+func (m *PetModel) GetCollection() *mongo.Collection {
+	return m.C
 }
 
 // Returns all pets in the collection
@@ -23,6 +29,8 @@ func (m *PetModel) All(ctx context.Context) ([]PetEntity, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer petCursor.Close(ctx)
+
 	err = petCursor.All(ctx, &b)
 	if err != nil {
 		return nil, err
@@ -100,6 +108,7 @@ func (m *PetModel) FindByStatus(ctx context.Context, status []string) ([]PetEnti
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
 
 	var pets []PetEntity
 	if err = cursor.All(ctx, &pets); err != nil {
@@ -120,10 +129,29 @@ func (m *PetModel) FindBytags(ctx context.Context, tags []string) ([]PetEntity, 
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
 
 	var pets []PetEntity
 	if err = cursor.All(ctx, &pets); err != nil {
 		return nil, err
 	}
 	return pets, nil
+}
+
+// EnsureIndexes creates necessary indexes for the pets collection
+func (m *PetModel) EnsureIndexes(ctx context.Context) error {
+	models := []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "id", Value: 1}},
+			Options: options.Index().SetUnique(true).SetSparse(true),
+		},
+		{
+			Keys: bson.D{{Key: "status", Value: 1}},
+		},
+		{
+			Keys: bson.D{{Key: "tags.name", Value: 1}},
+		},
+	}
+	_, err := m.C.Indexes().CreateMany(ctx, models)
+	return err
 }

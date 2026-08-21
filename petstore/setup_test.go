@@ -2,6 +2,7 @@ package petstore
 
 import (
 	"context"
+	"io"
 	"log"
 	"os"
 	"testing"
@@ -9,61 +10,74 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
 
 var (
-	testApp *Application
-	client  *mongo.Client
+	testApp        *Application
+	client         *mongo.Client
+	mongoAvailable bool
 )
 
-func TestMain(m *testing.M) {
-	// Setup
-	mongoURI := "mongodb://localhost:27017"
-	mongoDatabase := "petstore_test"
+// skipIfNoMongo is a test helper that skips integration tests if MongoDB is unreachable.
+func skipIfNoMongo(t *testing.T) {
+	t.Helper()
+	if !mongoAvailable {
+		t.Skip("Skipping integration test: MongoDB is not available")
+	}
+}
 
-	// Create logger for writing information and error messages.
-	infoLog := log.New(os.Stdout, "INFO\t", log.Ldate|log.Ltime)
+func TestMain(m *testing.M) {
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://localhost:27017"
+	}
+	mongoDatabase := os.Getenv("MONGO_DATABASE")
+	if mongoDatabase == "" {
+		mongoDatabase = "petstore_test"
+	}
+
+	infoLog := log.New(io.Discard, "INFO\t", log.Ldate|log.Ltime)
 	errLog := log.New(os.Stderr, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
 
-	// Create mongo client configuration
-	co := options.Client().ApplyURI(mongoURI)
+	co := options.Client().ApplyURI(mongoURI).SetServerSelectionTimeout(2 * time.Second)
 
-	// Establish database connection
-	var err error
-	client, err = mongo.NewClient(co)
-	if err != nil {
-		log.Fatalf("Failed to create mongo client: %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	err = client.Connect(ctx)
-	if err != nil {
-		log.Fatalf("Failed to connect to mongo: %v", err)
+	var err error
+	client, err = mongo.Connect(ctx, co)
+	if err == nil {
+		if err = client.Ping(ctx, readpref.Primary()); err == nil {
+			mongoAvailable = true
+			log.Println("MongoDB connected for integration tests")
+		}
 	}
 
-	infoLog.Printf("Database connection established")
-	testApp = NewLog(
-		infoLog,
-		errLog,
-		&PetModel{
-			C: client.Database(mongoDatabase).Collection("pets"),
-		},
-		&StoreModel{
-			C: client.Database(mongoDatabase).Collection("stores"),
-		},
-		&UserModel{
-			C: client.Database(mongoDatabase).Collection("users"),
-		},
-	)
+	if mongoAvailable {
+		testApp = NewLog(
+			infoLog,
+			errLog,
+			&PetModel{
+				C: client.Database(mongoDatabase).Collection("pets"),
+			},
+			&StoreModel{
+				C: client.Database(mongoDatabase).Collection("stores"),
+			},
+			&UserModel{
+				C: client.Database(mongoDatabase).Collection("users"),
+			},
+		)
+	} else {
+		log.Println("MongoDB is not available. Integration tests will be skipped; unit tests will run.")
+	}
 
-	// Run tests
 	code := m.Run()
 
-	// Teardown
-	if err = client.Disconnect(context.Background()); err != nil {
-		log.Printf("Failed to disconnect from mongo: %v", err)
+	if mongoAvailable && client != nil {
+		discCtx, discCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer discCancel()
+		_ = client.Disconnect(discCtx)
 	}
 
 	os.Exit(code)

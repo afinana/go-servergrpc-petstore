@@ -13,32 +13,56 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"os"
+	"os/signal"
+	"strings"
+	"syscall"
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/reflection"
 	api "middleland.net/swaggerapi/petstore"
 )
 
+func getEnv(key, fallback string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return fallback
+}
+
 func main() {
+	// Define command-line flags with environment variable fallbacks
+	defaultServerAddr := getEnv("SERVER_ADDR", "localhost:8090")
+	if port := os.Getenv("PORT"); port != "" {
+		defaultServerAddr = ":" + port
+	}
+	defaultMongoURI := getEnv("MONGO_URI", "mongodb://localhost:27017")
+	defaultMongoDatabase := getEnv("MONGO_DATABASE", "petstore")
+	defaultEnableCredentials := os.Getenv("ENABLE_CREDENTIALS") == "true"
 
-	// Define command-line flags
-	serverAddr := flag.String("serverAddr", "localhost", "HTTP server network address")
-	serverPort := flag.Int("serverPort", 8090, "HTTP server network port")
-
-	mongoURI := flag.String("mongoURI", "mongodb://localhost:27017", "Database hostname url")
-	mongoDatabase := flag.String("mongoDatabase", "petstore", "Database name")
-	enableCredentials := flag.Bool("enableCredentials", false, "Enable the use of credentials for mongo connection")
+	serverAddr := flag.String("serverAddr", defaultServerAddr, "gRPC server network address")
+	mongoURI := flag.String("mongoURI", defaultMongoURI, "Database hostname url")
+	mongoDatabase := flag.String("mongoDatabase", defaultMongoDatabase, "Database name")
+	enableCredentials := flag.Bool("enableCredentials", defaultEnableCredentials, "Enable the use of credentials for mongo connection")
 	flag.Parse()
 
 	// Create logger for writing information and error messages.
 	infoLog := log.New(&api.ColoredWriter{W: os.Stdout, Color: api.ColorGreen}, "INFO\t", log.Ldate|log.Ltime)
 	errLog := log.New(&api.ColoredWriter{W: os.Stderr, Color: api.ColorRed}, "ERROR\t", log.Ldate|log.Ltime|log.Lshortfile)
+
+	// Log configuration parameters
+	infoLog.Printf("serverAddr: %s", *serverAddr)
+	infoLog.Printf("mongoURI: %s", *mongoURI)
+	infoLog.Printf("mongoDatabase: %s", *mongoDatabase)
+	infoLog.Printf("enableCredentials: %t", *enableCredentials)
 
 	// Create mongo client configuration
 	co := options.Client().ApplyURI(*mongoURI)
@@ -49,57 +73,98 @@ func main() {
 		}
 	}
 
-	// Establish database connection
-	client, err := mongo.NewClient(co)
-	if err != nil {
-		errLog.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+	// Establish database connection using context
+	connectCtx, connectCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer connectCancel()
 
-	err = client.Connect(ctx)
+	client, err := mongo.Connect(connectCtx, co)
 	if err != nil {
-		errLog.Fatal(err)
+		errLog.Fatalf("Failed to initialize mongo client: %v", err)
+	}
+
+	// Ping the primary to verify database connectivity
+	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer pingCancel()
+	if err = client.Ping(pingCtx, readpref.Primary()); err != nil {
+		errLog.Fatalf("Failed to ping database: %v", err)
 	}
 
 	defer func() {
-		if err = client.Disconnect(ctx); err != nil {
-			panic(err)
+		discCtx, discCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer discCancel()
+		if err = client.Disconnect(discCtx); err != nil {
+			errLog.Printf("Error disconnecting database: %v", err)
 		}
 	}()
 
 	infoLog.Printf("Database connection established")
+
+	// Initialize repositories
+	petsRepo := &api.PetModel{C: client.Database(*mongoDatabase).Collection("pets")}
+	storesRepo := &api.StoreModel{C: client.Database(*mongoDatabase).Collection("stores")}
+	usersRepo := &api.UserModel{C: client.Database(*mongoDatabase).Collection("users")}
+
+	// Ensure database indexes
+	indexCtx, indexCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer indexCancel()
+	if err := petsRepo.EnsureIndexes(indexCtx); err != nil {
+		errLog.Printf("Warning: failed to ensure pet indexes: %v", err)
+	}
+	if err := storesRepo.EnsureIndexes(indexCtx); err != nil {
+		errLog.Printf("Warning: failed to ensure store indexes: %v", err)
+	}
+	if err := usersRepo.EnsureIndexes(indexCtx); err != nil {
+		errLog.Printf("Warning: failed to ensure user indexes: %v", err)
+	}
+
 	app := api.NewLog(
 		infoLog,
 		errLog,
-		&api.PetModel{
-			C: client.Database(*mongoDatabase).Collection("pets"),
-		},
-		&api.StoreModel{
-			C: client.Database(*mongoDatabase).Collection("stores"),
-		},
-		&api.UserModel{
-			C: client.Database(*mongoDatabase).Collection("users"),
-		},
+		petsRepo,
+		storesRepo,
+		usersRepo,
 	)
 
-	// Initialize a new http.Server struct.
-	serverURI := fmt.Sprintf("%s:%d", *serverAddr, *serverPort)
-	infoLog.Printf("Starting server on %s", serverURI)
-
-	// Start listening in serverPort
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *serverPort))
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+	// Parse server network address
+	addr := *serverAddr
+	if !strings.Contains(addr, ":") {
+		addr = ":" + addr
 	}
 
-	// Create a new Grpc Server
+	// Start listening on serverAddr
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		errLog.Fatalf("failed to listen: %v", err)
+	}
+
+	// Create a new gRPC Server
 	server := grpc.NewServer()
 	api.RegisterSwaggerPetstoreServiceServer(server, app)
 
-	// Start serve request
-	log.Printf("server listening at %v", lis.Addr())
-	if err := server.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
-	}
+	// Register gRPC reflection service for dynamic discovery (grpcurl, Postman, etc.)
+	reflection.Register(server)
+
+	// Register standard gRPC Health Check service
+	healthServer := health.NewServer()
+	grpc_health_v1.RegisterHealthServer(server, healthServer)
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("petstore.SwaggerPetstoreService", grpc_health_v1.HealthCheckResponse_SERVING)
+
+	infoLog.Printf("Starting gRPC server on %s (Reflection and Health checks enabled)", addr)
+	go func() {
+		if err := server.Serve(lis); err != nil && err != grpc.ErrServerStopped {
+			errLog.Fatalf("failed to serve: %v", err)
+		}
+	}()
+
+	// Graceful shutdown
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+
+	infoLog.Println("Shutting down server...")
+	healthServer.SetServingStatus("", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+	healthServer.SetServingStatus("petstore.SwaggerPetstoreService", grpc_health_v1.HealthCheckResponse_NOT_SERVING)
+	server.GracefulStop()
+	infoLog.Println("Server exiting")
 }

@@ -10,6 +10,7 @@ import (
 )
 
 func TestUserLifecycle(t *testing.T) {
+	skipIfNoMongo(t)
 	ctx := context.Background()
 	username := "testuser_lifecycle"
 	user := &User{
@@ -105,11 +106,88 @@ func TestUserLifecycle(t *testing.T) {
 	})
 }
 
+func TestCreateUsersWithArrayInput(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	users := []*User{
+		{Id: 2001, Username: "batch_array_1", Email: "b1@example.com"},
+		{Id: 2002, Username: "batch_array_2", Email: "b2@example.com"},
+	}
+
+	req := &CreateUsersWithArrayInputRequest{Body: users}
+	_, err := testApp.CreateUsersWithArrayInput(ctx, req)
+	if err != nil {
+		t.Fatalf("CreateUsersWithArrayInput failed: %v", err)
+	}
+
+	// Verify retrieval
+	u1, err := testApp.GetUserByName(ctx, &GetUserByNameRequest{Username: "batch_array_1"})
+	if err != nil {
+		t.Fatalf("Failed to retrieve batch_array_1: %v", err)
+	}
+	if u1.Email != "b1@example.com" {
+		t.Errorf("Expected email 'b1@example.com', got '%s'", u1.Email)
+	}
+}
+
+func TestCreateUsersWithListInput(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	users := []*User{
+		{Id: 3001, Username: "batch_list_1", Email: "l1@example.com"},
+	}
+
+	req := &CreateUsersWithListInputRequest{Body: users}
+	_, err := testApp.CreateUsersWithListInput(ctx, req)
+	if err != nil {
+		t.Fatalf("CreateUsersWithListInput failed: %v", err)
+	}
+
+	u1, err := testApp.GetUserByName(ctx, &GetUserByNameRequest{Username: "batch_list_1"})
+	if err != nil {
+		t.Fatalf("Failed to retrieve batch_list_1: %v", err)
+	}
+	if u1.Email != "l1@example.com" {
+		t.Errorf("Expected email 'l1@example.com', got '%s'", u1.Email)
+	}
+}
+
 func TestLoginInvalidUser(t *testing.T) {
+	skipIfNoMongo(t)
 	ctx := context.Background()
 	req := &LoginUserRequest{Username: "nonexistent", Password: "password"}
 	_, err := testApp.LoginUser(ctx, req)
 	if status.Code(err) != codes.Unauthenticated {
 		t.Errorf("Expected Unauthenticated error, got %v", err)
+	}
+}
+
+func TestCreateUser_NilBody(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	req := &CreateUserRequest{Body: nil}
+	_, err := testApp.CreateUser(ctx, req)
+	if err == nil {
+		t.Fatalf("Expected error for nil body, got nil")
+	}
+	if status.Code(err) != codes.InvalidArgument {
+		t.Errorf("Expected InvalidArgument code, got %v", status.Code(err))
+	}
+}
+
+func TestGetUserByName_NotFound(t *testing.T) {
+	skipIfNoMongo(t)
+	ctx := context.Background()
+
+	req := &GetUserByNameRequest{Username: "user_does_not_exist_404"}
+	_, err := testApp.GetUserByName(ctx, req)
+	if err == nil {
+		t.Fatalf("Expected error for nonexistent user, got nil")
+	}
+	if status.Code(err) != codes.NotFound {
+		t.Errorf("Expected NotFound code, got %v", status.Code(err))
 	}
 }

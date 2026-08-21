@@ -14,6 +14,11 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
+# Binaries
+swaggerapi
+petstore-server
+bin/
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 

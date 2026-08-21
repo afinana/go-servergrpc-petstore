@@ -12,8 +12,10 @@ package petstore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"go.mongodb.org/mongo-driver/mongo"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
@@ -21,23 +23,13 @@ import (
 
 // CreateUser creates a new user.
 func (s *Application) CreateUser(ctx context.Context, in *CreateUserRequest) (*emptypb.Empty, error) {
-	s.infoLog.Printf("Endpoint Hit: CreateUser %s", in.Body.Username)
 	if in.Body == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "request body is empty")
 	}
+	s.infoLog.Printf("Endpoint Hit: CreateUser %s", in.Body.Username)
 
-	userEntity := UserEntity{
-		Id:         in.Body.Id,
-		Username:   in.Body.Username,
-		FirstName:  in.Body.FirstName,
-		LastName:   in.Body.LastName,
-		Email:      in.Body.Email,
-		Password:   in.Body.Password,
-		Phone:      in.Body.Phone,
-		UserStatus: in.Body.UserStatus,
-	}
-
-	_, err := s.users.Insert(ctx, userEntity)
+	userEntity := createUserEntity(in.Body)
+	_, err := s.users.Insert(ctx, *userEntity)
 	if err != nil {
 		s.serverError(err)
 		return nil, status.Errorf(codes.Internal, "failed to create user: %v", err)
@@ -50,18 +42,10 @@ func (s *Application) CreateUser(ctx context.Context, in *CreateUserRequest) (*e
 func (s *Application) CreateUsersWithArrayInput(ctx context.Context, in *CreateUsersWithArrayInputRequest) (*emptypb.Empty, error) {
 	s.infoLog.Printf("Endpoint Hit: CreateUsersWithArrayInput")
 	for _, user := range in.Body {
-		userEntity := UserEntity{
-			Id:         user.Id,
-			Username:   user.Username,
-			FirstName:  user.FirstName,
-			LastName:   user.LastName,
-			Email:      user.Email,
-			Password:   user.Password,
-			Phone:      user.Phone,
-			UserStatus: user.UserStatus,
-		}
-		_, err := s.users.Insert(ctx, userEntity)
+		userEntity := createUserEntity(user)
+		_, err := s.users.Insert(ctx, *userEntity)
 		if err != nil {
+			s.serverError(err)
 			return nil, status.Errorf(codes.Internal, "failed to create user %s: %v", user.Username, err)
 		}
 	}
@@ -72,18 +56,10 @@ func (s *Application) CreateUsersWithArrayInput(ctx context.Context, in *CreateU
 func (s *Application) CreateUsersWithListInput(ctx context.Context, in *CreateUsersWithListInputRequest) (*emptypb.Empty, error) {
 	s.infoLog.Printf("Endpoint Hit: CreateUsersWithListInput")
 	for _, user := range in.Body {
-		userEntity := UserEntity{
-			Id:         user.Id,
-			Username:   user.Username,
-			FirstName:  user.FirstName,
-			LastName:   user.LastName,
-			Email:      user.Email,
-			Password:   user.Password,
-			Phone:      user.Phone,
-			UserStatus: user.UserStatus,
-		}
-		_, err := s.users.Insert(ctx, userEntity)
+		userEntity := createUserEntity(user)
+		_, err := s.users.Insert(ctx, *userEntity)
 		if err != nil {
+			s.serverError(err)
 			return nil, status.Errorf(codes.Internal, "failed to create user %s: %v", user.Username, err)
 		}
 	}
@@ -106,19 +82,14 @@ func (s *Application) GetUserByName(ctx context.Context, in *GetUserByNameReques
 	s.infoLog.Printf("Endpoint Hit: GetUserByName %s", in.Username)
 	userEntity, err := s.users.FindByName(ctx, in.Username)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "user not found: %v", err)
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return nil, status.Errorf(codes.NotFound, "user not found: %s", in.Username)
+		}
+		s.serverError(err)
+		return nil, status.Errorf(codes.Internal, "failed to get user: %v", err)
 	}
 
-	return &User{
-		Id:         userEntity.Id,
-		Username:   userEntity.Username,
-		FirstName:  userEntity.FirstName,
-		LastName:   userEntity.LastName,
-		Email:      userEntity.Email,
-		Password:   userEntity.Password,
-		Phone:      userEntity.Phone,
-		UserStatus: userEntity.UserStatus,
-	}, nil
+	return createUserDTO(userEntity), nil
 }
 
 // LoginUser authenticates a user and starts a session.
@@ -145,23 +116,17 @@ func (s *Application) LogoutUser(ctx context.Context, in *emptypb.Empty) (*empty
 
 // UpdateUser updates an existing user's information.
 func (s *Application) UpdateUser(ctx context.Context, in *UpdateUserRequest) (*emptypb.Empty, error) {
-	s.infoLog.Printf("Endpoint Hit: UpdateUser %s", in.Username)
 	if in.Body == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "request body is empty")
 	}
+	s.infoLog.Printf("Endpoint Hit: UpdateUser %s", in.Username)
 
-	userEntity := UserEntity{
-		Id:         in.Body.Id,
-		Username:   in.Body.Username,
-		FirstName:  in.Body.FirstName,
-		LastName:   in.Body.LastName,
-		Email:      in.Body.Email,
-		Password:   in.Body.Password,
-		Phone:      in.Body.Phone,
-		UserStatus: in.Body.UserStatus,
+	userEntity := createUserEntity(in.Body)
+	if userEntity.Username == "" {
+		userEntity.Username = in.Username
 	}
 
-	_, err := s.users.Update(ctx, userEntity)
+	_, err := s.users.Update(ctx, *userEntity)
 	if err != nil {
 		s.serverError(err)
 		return nil, status.Errorf(codes.Internal, "failed to update user: %v", err)

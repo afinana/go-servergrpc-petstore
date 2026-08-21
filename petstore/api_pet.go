@@ -147,11 +147,10 @@ func (app *Application) UploadFile(ctx context.Context, in *UploadFileRequest) (
 	app.infoLog.Printf("Endpoint Hit: UploadFile %d %s", in.PetId, in.AdditionalMetadata)
 	// Validate input parameters
 	if in.PetId == 0 {
-		app.infoLog.Printf("UploadFile:: pet ID is presented")
-		if in.File == "" {
-			app.infoLog.Printf("UploadFile:: file data is missing")
-			return nil, status.Errorf(codes.InvalidArgument, "file data is missing")
-		}
+		return nil, status.Errorf(codes.InvalidArgument, "pet ID is required")
+	}
+	if in.File == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "file data is missing")
 	}
 
 	return &ApiResponse{
